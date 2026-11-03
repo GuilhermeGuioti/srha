@@ -73,9 +73,19 @@ está instalado. Em dúvida sobre a API de uma biblioteca, leia o que está em
    Prisma e só Prisma; a diferença entre ambientes é a variável de ambiente e nada mais.
    Isso mantém a escolha de hospedagem em aberto e atende o RNF11.
 
-   Em particular: **autenticação é Auth.js com Entra ID**. A §4.3 do documento de
-   requisitos proíbe base de senhas própria — nenhum sistema de auth de provedor entra
-   aqui, por mais conveniente que pareça.
+   Em particular: **autenticação é Auth.js**, com dois providers em produção —
+   Microsoft Entra ID (login institucional) e e-mail + senha próprio. A senha é decisão
+   do cliente de 2026-11-03, para o sistema não ficar parado enquanto a TI da Barão não
+   libera o registro no Entra ID, e é **permanente**: não sai quando o Entra ID entrar.
+   Diverge da §4.3 do documento de requisitos, que proibia base de senhas própria.
+
+   Continua proibido sistema de auth de provedor (Auth0, Clerk, Supabase Auth…): o login
+   por senha é `Credentials` do próprio Auth.js, como o login falso de desenvolvimento.
+   Continua proibido autocadastro: só a secretaria define a senha, sempre **provisória**
+   (`/admin/usuarios`), e a pessoa troca no primeiro acesso (`/trocar-senha`); depois,
+   altera pelo menu da conta (`/senha`), informando a atual — esqueceu, pede outra
+   provisória à secretaria. Quem só entra pela Microsoft não cria senha. Hash com
+   `scrypt` de `node:crypto` (`lib/auth/senha.ts`), sem dependência nova; nunca texto puro.
 
 4. **Nada de Puppeteer ou Chromium.** Não cabe em função serverless.
 
@@ -97,17 +107,52 @@ São coisas separadas. Confundi-las é o erro mais provável neste projeto.
 
 ### Fluxo de login
 
-1. Auth.js conduz o OIDC e devolve o profile.
+Os passos abaixo são do Entra ID. O login por senha (ver regra 3) chega ao mesmo ponto
+por outro caminho: acha o usuário ativo pelo e-mail e confere o hash — sem usuário ou
+sem senha definida, nega. Os passos 4 e 5 valem para os dois.
+
+1. Auth.js conduz o OIDC e devolve o profile. O `tid` do token precisa ser o do tenant
+   do `AUTH_MICROSOFT_ENTRA_ID_ISSUER` — emissor genérico (`common`, `organizations`)
+   é recusado na configuração (`lib/auth/entra.ts`).
 2. Busca o usuário **por `entraOid` primeiro; se não achar, por e-mail**.
 3. Se achou por e-mail e `entraOid` está vazio, **grave o `oid` agora**. Daí em diante a
    busca é por `oid` — e-mail muda (casamento, correção de grafia) e a pessoa perderia
-   o vínculo com todo o histórico dela.
+   o vínculo com todo o histórico dela. Se o `entraOid` gravado for **outro**, negue:
+   é outra pessoa com o mesmo e-mail (endereço reaproveitado) e não herda o histórico.
 4. **Não achou de jeito nenhum: negue o acesso.** Nunca crie usuário automaticamente.
    Qualquer aluno com conta institucional passa pela Microsoft; é esta checagem que barra.
-5. **Coloque apenas `usuarioId` no token da sessão.** Perfis e vínculos são carregados
-   por requisição, com `cache()` do React para não repetir a query no mesmo render.
-   `ativo` também: usuário inativado pela secretaria perde o acesso na requisição
-   seguinte, não quando a sessão expirar.
+5. **Coloque apenas `usuarioId` e `versaoSessao` no token da sessão.** Perfis e vínculos
+   são carregados por requisição, com `cache()` do React para não repetir a query no
+   mesmo render. `ativo` também: usuário inativado pela secretaria perde o acesso na
+   requisição seguinte, não quando a sessão expirar. E a `versaoSessao` do token é
+   comparada com a do banco: toda mudança de senha a incrementa e derruba as sessões
+   abertas antes dela (quem trocou recebe uma sessão nova na hora).
+
+### Proteções do login por senha
+
+Revisão de segurança de 2026-11-03. Em `lib/auth/login.ts` e `lib/auth/senha.ts`:
+
+- **5 tentativas erradas bloqueiam o acesso por senha da conta por 15 minutos.** A
+  tentativa é reservada numa instrução SQL só, antes de conferir — nem rajada paralela
+  passa do limite. Bloqueio por conta, não por IP: quem souber o e-mail consegue
+  bloquear alguém por 15 minutos, preço aceito por não depender de serviço externo. A
+  senha provisória da secretaria desbloqueia. A senha atual pedida em `/senha` conta
+  como tentativa.
+- **Toda recusa leva o mesmo tempo e dá a mesma resposta** — e-mail inexistente, sem
+  senha, bloqueado ou senha errada (`gastarTempoDeConferencia`). Senão o tempo de
+  resposta diria quem tem senha.
+- **Hash `scrypt$N$r$p$sal$hash`**, com N=2^14, r=8, p=5 (equivalente ao mínimo da
+  OWASP, 16 MB por hash). Os parâmetros vão no hash: subir o custo depois não invalida
+  senha nenhuma. Senha normalizada em NFC antes do hash; de 8 a 128 caracteres.
+- **Toda senha provisória fica registrada** em `DefinicaoSenha`: de quem, por quem e
+  quando, visível em `/admin/usuarios`. Sem isso, a secretaria podia definir a senha de
+  alguém, entrar como a pessoa e aprovar relatórios em nome dela sem deixar marca. Só
+  inclusão: o banco recusa alterar ou apagar (trigger). Registro sem autor é a senha
+  inicial do seed. Impedir senha em conta já ligada à Microsoft ficou para o cliente
+  decidir antes de o Entra ID entrar no ar.
+- **Senha provisória prende a pessoa na troca** nos guards (`exigirSessao` e
+  `exigirSessaoPagina`), em tela, Server Action e download — só a troca passa
+  `{ senhaProvisoria: "permitir" }`.
 
 E-mail é gravado e comparado em minúsculas — o `@unique` do banco diferencia caixa.
 
@@ -126,8 +171,9 @@ usuários fixos vindos do seed:
 - um coordenador que também dá aula no próprio curso (para testar a autoaprovação)
 - uma pessoa da secretaria acadêmica
 
-Um `if` na configuração decide qual provider sobe. Isso existe para o projeto não ficar
-parado esperando a TI liberar o registro no Entra ID.
+Ele se soma aos de produção, não os substitui: em desenvolvimento sobem o falso, o de
+senha e — se `AUTH_MICROSOFT_ENTRA_ID_ID` estiver definida — o Entra ID. Sem essa
+variável o Entra ID não sobe em ambiente nenhum, e o botão dele some do `/login`.
 
 ### Autorização
 
@@ -174,7 +220,8 @@ Schema completo em `docs/SRHA-especificacao-desenvolvimento.md` §4. Copie de l�
   período é evolução possível, não desta versão.
 - **`cargaHorariaTotal` sempre igual à soma dos itens.** Recalcule dentro da mesma
   transação que altera itens. O cliente nunca envia o total.
-- **Relatório aprovado e evento de auditoria não sofrem update nem delete.**
+- **Relatório aprovado, evento de auditoria e registro de senha definida
+  (`DefinicaoSenha`) não sofrem update nem delete.**
   Não exponha operação capaz disso em lugar nenhum (RNF09, retenção de 5 anos).
   O próprio Postgres recusa, por triggers (migration `imutabilidade_aprovado_e_auditoria`),
   que também travam incluir, alterar ou remover item de relatório aprovado.
@@ -279,7 +326,9 @@ chamada + revalidação.
 
 | Rota | Perfil | Conteúdo |
 |---|---|---|
-| `/login` | público | Botão único de entrada institucional |
+| `/login` | público | Entrada institucional (Entra ID) e e-mail + senha |
+| `/trocar-senha` | todos | Troca obrigatória da senha provisória (fora do `(dashboard)`) |
+| `/senha` | todos com senha | Alteração da própria senha, pelo menu da conta |
 | `/validar` | público | Validação de autenticidade do PDF — ver §Carimbo de autenticidade |
 | `/` | todos | Conteúdo por perfil — ver nota abaixo da tabela |
 | `/relatorios/[id]` | docente | Formulário com itens, total e ações |
@@ -316,8 +365,10 @@ a pasta, o que precisa de login e o que não precisa: `app/(public)/...` e
 `app/(private)/...`, lado a lado.
 
 - **`(public)`** — sem guard. Hoje `/login` e `/validar`.
-- **`(private)`** — exige sessão (`exigirSessaoPagina`). Hoje só o subgrupo
-  `(dashboard)` aninhado dentro dele — não sobrou rota solta direto em `(private)`.
+- **`(private)`** — exige sessão (`exigirSessaoPagina`). Solta direto nele, só
+  `/trocar-senha`: fica fora do `(dashboard)` de propósito, porque o layout do
+  `(dashboard)` manda para ela quem está com senha provisória — dentro dele, a
+  própria tela entraria em loop.
 - **`(private)/(dashboard)`** — é `(private)`, então já exige sessão; além disso
   desenha a barra superior (mockup: "Horas Atividades" + navegação + crachá de
   perfil + Sair), em `app/(private)/(dashboard)/layout.tsx`. Hoje `/`, `/relatorios`,
@@ -428,6 +479,9 @@ O seed cria a secretaria inicial. Fora de produção é `admin@srha.dev` (a cont
 falso). Em produção — seed rodado com `NODE_ENV=production` — vem de
 `SECRETARIA_INICIAL_EMAIL` (e, opcional, `SECRETARIA_INICIAL_NOME`), porque o login é
 pelo Entra ID e precisa ser uma conta institucional real; sem a variável, o seed falha.
+Enquanto o Entra ID não estiver configurado, defina também `SECRETARIA_INICIAL_SENHA`:
+vira a senha provisória dela (só se ainda não tiver senha) — sem isso ninguém entra,
+porque só a secretaria define senha.
 
 O volume nomeado preserva os dados entre `docker compose down` e `up`. Para começar do
 zero, `docker compose down -v` e rode migrate e seed de novo — o seed é idempotente.
