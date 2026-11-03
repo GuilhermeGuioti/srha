@@ -48,11 +48,34 @@ model Usuario {
   ativo     Boolean  @default(true)
   criadoEm  DateTime @default(now())
 
+  senhaHash         String?
+  senhaProvisoria   Boolean   @default(false)
+  tentativasSenha   Int       @default(0)
+  senhaBloqueadaAte DateTime?
+  versaoSessao      Int       @default(0)
+
+  senhasDefinidas     DefinicaoSenha[] @relation("SenhaDefinidaPara")
+  senhasQueDefiniu    DefinicaoSenha[] @relation("SenhaDefinidaPor")
   perfis              UsuarioPerfil[]
   vinculosDocente     VinculoDocenteCurso[]
   vinculosCoordenador VinculoCoordenadorCurso[]
   relatorios          Relatorio[]
   eventos             EventoAuditoria[]
+}
+
+// Cada senha provisória definida para alguém: quem definiu e quando. Só
+// inclusão — o banco recusa alterar ou apagar (migration rastro_senha_provisoria).
+// definidaPorId nulo é a senha inicial do seed, sem pessoa por trás.
+model DefinicaoSenha {
+  id            Int      @id @default(autoincrement())
+  usuarioId     Int
+  definidaPorId Int?
+  ocorridoEm    DateTime @default(now())
+
+  usuario     Usuario  @relation("SenhaDefinidaPara", fields: [usuarioId], references: [id])
+  definidaPor Usuario? @relation("SenhaDefinidaPor", fields: [definidaPorId], references: [id])
+
+  @@index([usuarioId, ocorridoEm])
 }
 
 model UsuarioPerfil {

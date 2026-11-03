@@ -7,34 +7,59 @@ import { resolverAvaliadorId } from "../services/workflow";
 
 export type Sessao = { usuarioId: number };
 
-// O token só guarda o usuarioId e vale até o próximo login, então "ativo" é
-// conferido por requisição: usuário inativado pela secretaria perde o acesso
-// na hora, não quando a sessão expirar.
-const usuarioAtivo = cache(async (usuarioId: number): Promise<boolean> => {
-  const usuario = await prisma.usuario.findUnique({ where: { id: usuarioId }, select: { ativo: true } });
-  return usuario?.ativo ?? false;
+// Só a troca da senha provisória aceita quem ainda está com ela.
+type OpcoesSessao = { senhaProvisoria?: "permitir" };
+
+type EstadoConta = "ok" | "inativo" | "sessaoAntiga" | "senhaProvisoria";
+
+// O token vale até o próximo login, então a conta é conferida por requisição:
+// usuário inativado perde o acesso na hora; senha trocada ou redefinida muda a
+// versaoSessao e derruba as sessões abertas antes disso; senha provisória
+// prende a pessoa na troca, em tela e em Server Action.
+const estadoDaConta = cache(async (usuarioId: number, versaoSessao: number): Promise<EstadoConta> => {
+  const usuario = await prisma.usuario.findUnique({
+    where: { id: usuarioId },
+    select: { ativo: true, versaoSessao: true, senhaProvisoria: true },
+  });
+  if (!usuario?.ativo) return "inativo";
+  if (usuario.versaoSessao !== versaoSessao) return "sessaoAntiga";
+  return usuario.senhaProvisoria ? "senhaProvisoria" : "ok";
 });
 
-export async function exigirSessao(): Promise<Sessao> {
+export async function exigirSessao(opcoes: OpcoesSessao = {}): Promise<Sessao> {
   const sessao = await auth();
   if (!sessao?.usuarioId) {
     throw new Error("Sessão não encontrada. Faça login novamente.");
   }
-  if (!(await usuarioAtivo(sessao.usuarioId))) {
+  const estado = await estadoDaConta(sessao.usuarioId, sessao.versaoSessao ?? 0);
+  if (estado === "inativo") {
     throw new Error("Usuário inativo. Procure a secretaria acadêmica.");
+  }
+  if (estado === "sessaoAntiga") {
+    throw new Error("Sua senha mudou e esta sessão foi encerrada. Faça login novamente.");
+  }
+  if (estado === "senhaProvisoria" && opcoes.senhaProvisoria !== "permitir") {
+    throw new Error("Troque a senha provisória antes de continuar.");
   }
   return { usuarioId: sessao.usuarioId };
 }
 
 // Para pages (não Server Actions): sem sessão, manda pro /login em vez de
 // estourar erro na renderização.
-export async function exigirSessaoPagina(): Promise<Sessao> {
+export async function exigirSessaoPagina(opcoes: OpcoesSessao = {}): Promise<Sessao> {
   const sessao = await auth();
   if (!sessao?.usuarioId) {
     redirect("/login");
   }
-  if (!(await usuarioAtivo(sessao.usuarioId))) {
+  const estado = await estadoDaConta(sessao.usuarioId, sessao.versaoSessao ?? 0);
+  if (estado === "inativo") {
     redirect("/login?erro=1");
+  }
+  if (estado === "sessaoAntiga") {
+    redirect("/login?erro=sessao");
+  }
+  if (estado === "senhaProvisoria" && opcoes.senhaProvisoria !== "permitir") {
+    redirect("/trocar-senha");
   }
   return { usuarioId: sessao.usuarioId };
 }

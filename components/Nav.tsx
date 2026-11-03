@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { acaoSair } from "../lib/auth/acoes";
-import { IconeSair } from "./Icones";
+import { IconeCadeado, IconeSair } from "./Icones";
 import { LogoInstitucional } from "./MarcaInstitucional";
 import { Pill } from "./Pill";
 
@@ -16,11 +16,13 @@ export function Nav({
   emailUsuario,
   perfilRotulo,
   links,
+  temSenha,
 }: {
   nomeUsuario: string;
   emailUsuario: string;
   perfilRotulo: string;
   links: LinkNav[];
+  temSenha: boolean;
 }) {
   const pathname = usePathname();
   const inicial = nomeUsuario.trim().charAt(0).toUpperCase();
@@ -94,6 +96,21 @@ export function Nav({
           <div className="border-b border-borda px-4 py-3">
             <Pill cor="neutro">{perfilRotulo}</Pill>
           </div>
+          {/* Só quem tem senha: quem entra só pela Microsoft não ganha uma por aqui. */}
+          {temSenha && (
+            <div className="border-b border-borda p-2">
+              <Link
+                href="/senha"
+                // O popover mora no layout, que não remonta ao navegar: sem
+                // fechar à mão, o menu continuaria aberto sobre a tela nova.
+                onClick={() => document.getElementById(ID_MENU_CONTA)?.hidePopover()}
+                className="flex min-h-11 w-full items-center gap-2.5 rounded-xl px-3 text-[15px] font-semibold text-tinta transition-colors hover:bg-papel focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-azul-interativo"
+              >
+                <IconeCadeado className="h-5 w-5 text-tinta-suave" />
+                Alterar senha
+              </Link>
+            </div>
+          )}
           <form action={acaoSair} className="p-2">
             <button
               type="submit"

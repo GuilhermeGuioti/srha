@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { exigirPerfil } from "../../../../../lib/auth/guards";
 import { Perfil } from "../../../../../generated/prisma/client";
-import { criarUsuario, atualizarUsuario } from "../../../../../lib/services/usuarios";
+import { criarUsuario, atualizarUsuario, definirSenhaProvisoria } from "../../../../../lib/services/usuarios";
+import { SchemaSenha } from "../../../../../lib/senha";
 import { SchemaArquivoPlanilha, type ResultadoImportacao } from "../../../../../lib/importacao";
 import { importarUsuarios } from "../../../../../lib/services/importacao";
 import { paraResultadoErro, type Resultado } from "../../../../../lib/tipos";
@@ -46,6 +47,19 @@ export async function acaoAtualizarUsuario(
     const idValidado = SchemaId.parse(id);
     const validado = SchemaUsuario.parse(dados);
     await atualizarUsuario(idValidado, validado);
+    revalidatePath("/admin/usuarios");
+    return { ok: true, dados: undefined };
+  } catch (erro) {
+    return paraResultadoErro(erro);
+  }
+}
+
+export async function acaoDefinirSenhaProvisoria(id: number, senha: string): Promise<Resultado<void>> {
+  try {
+    const sessao = await exigirPerfil(Perfil.SECRETARIA);
+    const idValidado = SchemaId.parse(id);
+    const senhaValidada = SchemaSenha.parse(senha);
+    await definirSenhaProvisoria(idValidado, senhaValidada, sessao.usuarioId);
     revalidatePath("/admin/usuarios");
     return { ok: true, dados: undefined };
   } catch (erro) {

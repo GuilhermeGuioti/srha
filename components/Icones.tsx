@@ -155,6 +155,15 @@ export function IconeArquivo({ className }: PropsIcone) {
   );
 }
 
+export function IconeCadeado({ className }: PropsIcone) {
+  return (
+    <Icone className={className}>
+      <rect x="5" y="11" width="14" height="9" rx="2" />
+      <path d="M8 11V8a4 4 0 0 1 8 0v3M12 15v2" />
+    </Icone>
+  );
+}
+
 export function IconeValidar({ className }: PropsIcone) {
   return (
     <Icone className={className}>

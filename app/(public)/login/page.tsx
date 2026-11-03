@@ -1,16 +1,41 @@
 import { classeBotaoPrimario } from "../../../components/BotaoPrimario";
 import { BotaoSecundario } from "../../../components/BotaoSecundario";
-import { classeCampo } from "../../../components/Campo";
+import { Campo, classeCampo } from "../../../components/Campo";
 import { CartaoPublico } from "../../../components/CartaoPublico";
 import { MarcaInstitucional } from "../../../components/MarcaInstitucional";
 import { LinkTexto } from "../../../components/LinkTexto";
 import { MensagemErro } from "../../../components/MensagemErro";
 import { Pill } from "../../../components/Pill";
-import { acaoEntrar, acaoEntrarComEmail } from "./acoes";
+import { entraConfigurado } from "../../../lib/auth/config";
+import { LIMITE_TENTATIVAS_SENHA, MINUTOS_BLOQUEIO_SENHA } from "../../../lib/auth/login";
+import { TAMANHO_MAXIMO_SENHA } from "../../../lib/senha";
+import { AcessoDev } from "./acesso-dev";
+import { acaoEntrarComMicrosoft, acaoEntrarComSenha } from "./acoes";
+
+// `erro` vem das actions desta tela (e do guard, para usuário inativado);
+// `error`, do Auth.js, quando a volta da Microsoft é recusada.
+function mensagemDeErro(erro: unknown, error: unknown): string | null {
+  if (erro === "senha" || error === "CredentialsSignin") {
+    return `E-mail ou senha incorretos. Depois de ${LIMITE_TENTATIVAS_SENHA} tentativas erradas, o acesso por senha fica bloqueado por ${MINUTOS_BLOQUEIO_SENHA} minutos. Sem senha ou bloqueado? Procure a secretaria acadêmica.`;
+  }
+  if (erro === "sessao") {
+    return "Sua senha mudou e a sessão anterior foi encerrada. Entre de novo.";
+  }
+  if (error === "AccessDenied") {
+    return "Sua conta Microsoft não tem acesso ao sistema. Procure a secretaria acadêmica.";
+  }
+  if (error || erro === "microsoft-entra-id") {
+    return "Não foi possível entrar pela Microsoft. Tente de novo.";
+  }
+  if (erro) {
+    return "Não foi possível entrar com esse e-mail. Confira se está cadastrado e ativo.";
+  }
+  return null;
+}
 
 export default async function LoginPage(props: PageProps<"/login">) {
   const searchParams = await props.searchParams;
-  const erro = searchParams.erro === "1";
+  const erro = mensagemDeErro(searchParams.erro, searchParams.error);
 
   return (
     <main className="flex flex-1">
@@ -49,23 +74,61 @@ export default async function LoginPage(props: PageProps<"/login">) {
           sobretitulo="SRHA · Acesso institucional"
           titulo="Relatório de Horas Atividades"
           descricao={
-            <>
-              Entre com o e-mail <span className="font-mono font-medium text-tinta">@baraodemaua.br</span>. Não
-              existe senha própria neste sistema.
-            </>
+            entraConfigurado ? (
+              <>
+                Entre com a conta institucional{" "}
+                <span className="font-mono font-medium text-tinta">@baraodemaua.br</span> ou com o e-mail e a senha
+                recebidos da secretaria acadêmica.
+              </>
+            ) : (
+              "Entre com o e-mail e a senha recebidos da secretaria acadêmica."
+            )
           }
         >
 
           {erro && (
             <div className="mt-5">
-              <MensagemErro>Não foi possível entrar com esse e-mail. Confira se está cadastrado e ativo.</MensagemErro>
+              <MensagemErro>{erro}</MensagemErro>
             </div>
           )}
 
-          <form action={acaoEntrar}>
-            <button type="submit" className={`${classeBotaoPrimario} mt-7 min-h-[52px] w-full text-base`}>
-              Entrar com a conta institucional
-            </button>
+          {entraConfigurado && (
+            <>
+              <form action={acaoEntrarComMicrosoft}>
+                <button type="submit" className={`${classeBotaoPrimario} mt-7 min-h-[52px] w-full text-base`}>
+                  Entrar com a conta institucional
+                </button>
+              </form>
+              <div className="mt-6 flex items-center gap-3 text-[13px] font-semibold text-tinta-suave" aria-hidden>
+                <span className="h-px flex-1 bg-borda" />
+                ou com e-mail e senha
+                <span className="h-px flex-1 bg-borda" />
+              </div>
+            </>
+          )}
+
+          <form action={acaoEntrarComSenha} className={`${entraConfigurado ? "mt-4" : "mt-7"} flex flex-col gap-4`}>
+            <Campo rotulo="E-mail" htmlFor="email-login">
+              <input id="email-login" name="email" type="email" autoComplete="username" required className={classeCampo} />
+            </Campo>
+            <Campo rotulo="Senha" htmlFor="senha-login">
+              <input
+                id="senha-login"
+                name="senha"
+                type="password"
+                autoComplete="current-password"
+                required
+                maxLength={TAMANHO_MAXIMO_SENHA}
+                className={classeCampo}
+              />
+            </Campo>
+            {entraConfigurado ? (
+              <BotaoSecundario type="submit">Entrar com e-mail e senha</BotaoSecundario>
+            ) : (
+              <button type="submit" className={`${classeBotaoPrimario} mt-3 min-h-[52px] w-full text-base`}>
+                Entrar
+              </button>
+            )}
           </form>
 
           <div className="mt-7 border-t border-borda pt-6">
@@ -87,20 +150,7 @@ export default async function LoginPage(props: PageProps<"/login">) {
             </LinkTexto>
           </p>
 
-          {process.env.NODE_ENV === "development" && (
-            <form
-              action={acaoEntrarComEmail}
-              className="mt-6 flex flex-col gap-2 rounded-2xl border border-dashed border-borda-campo bg-superficie-sutil p-4 sm:flex-row sm:items-end"
-            >
-              <div className="flex-1">
-                <label htmlFor="email-dev" className="block text-[13px] font-semibold text-tinta-suave">
-                  Dev · entrar com outro e-mail cadastrado
-                </label>
-                <input id="email-dev" name="email" type="email" required className={`${classeCampo} mt-1.5 w-full`} />
-              </div>
-              <BotaoSecundario type="submit">Entrar</BotaoSecundario>
-            </form>
-          )}
+          {process.env.NODE_ENV === "development" && <AcessoDev />}
         </CartaoPublico>
       </section>
     </main>

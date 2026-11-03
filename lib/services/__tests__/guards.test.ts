@@ -6,8 +6,9 @@ import { DiaSemana, Perfil } from "../../../generated/prisma/client";
 // O guard lê a sessão do Auth.js; aqui ela é só o usuarioId da vez — o resto
 // (perfis, vínculos, ativo) vem do banco, como em produção.
 let usuarioLogado: number | null = null;
+let versaoDoToken: number | undefined;
 jest.mock("../../auth/config", () => ({
-  auth: async () => (usuarioLogado === null ? null : { usuarioId: usuarioLogado }),
+  auth: async () => (usuarioLogado === null ? null : { usuarioId: usuarioLogado, versaoSessao: versaoDoToken }),
 }));
 
 async function limpar() {
@@ -79,6 +80,7 @@ function como(usuarioId: number) {
 
 beforeEach(async () => {
   usuarioLogado = null;
+  versaoDoToken = undefined;
   await limpar();
 });
 
@@ -139,4 +141,29 @@ test("id que não é inteiro positivo nem chega ao banco", async () => {
   como(ambiente.docente.id);
   await expect(exigirAcessoAoRelatorio(Number.NaN, "visualizar")).rejects.toThrow("Relatório não encontrado.");
   await expect(exigirAcessoAoRelatorio(-1, "visualizar")).rejects.toThrow("Relatório não encontrado.");
+});
+
+test("senha mudada derruba a sessão emitida antes dela", async () => {
+  const ambiente = await obterAmbiente();
+  como(ambiente.docente.id);
+  versaoDoToken = 0;
+  await expect(exigirSessao()).resolves.toEqual({ usuarioId: ambiente.docente.id });
+
+  await prisma.usuario.update({ where: { id: ambiente.docente.id }, data: { versaoSessao: { increment: 1 } } });
+  await expect(exigirSessao()).rejects.toThrow("sessão foi encerrada");
+  await expect(exigirAcessoAoRelatorio(ambiente.relatorio.id, "visualizar")).rejects.toThrow("sessão foi encerrada");
+
+  // A sessão nova, emitida depois da troca, carrega a versão atual.
+  versaoDoToken = 1;
+  await expect(exigirSessao()).resolves.toEqual({ usuarioId: ambiente.docente.id });
+});
+
+test("com senha provisória nada passa além da própria troca, nem por Server Action", async () => {
+  const ambiente = await obterAmbiente();
+  await prisma.usuario.update({ where: { id: ambiente.docente.id }, data: { senhaProvisoria: true } });
+  como(ambiente.docente.id);
+
+  await expect(exigirSessao()).rejects.toThrow("Troque a senha provisória");
+  await expect(exigirAcessoAoRelatorio(ambiente.relatorio.id, "editar")).rejects.toThrow("Troque a senha provisória");
+  await expect(exigirSessao({ senhaProvisoria: "permitir" })).resolves.toEqual({ usuarioId: ambiente.docente.id });
 });

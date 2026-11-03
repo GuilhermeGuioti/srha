@@ -12,6 +12,20 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/api/relatorios/[id]/pdf": ["./lib/pdf/fontes/**", "./lib/pdf/imagens/**"],
   },
+
+  // Nenhuma tela é embutida em outro site: sem isto, o /login poderia ser
+  // carregado num iframe invisível para induzir cliques (clickjacking).
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "Content-Security-Policy", value: "frame-ancestors 'none'" },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

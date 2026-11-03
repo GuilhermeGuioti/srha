@@ -1,6 +1,8 @@
 import "dotenv/config";
 import { Perfil } from "../generated/prisma/enums";
 import { prisma } from "../lib/db";
+import { SchemaSenha } from "../lib/senha";
+import { definirSenhaProvisoria } from "../lib/services/usuarios";
 
 // A secretaria inicial. Os tipos de atividade são lista fixa e vêm da
 // migration tipos_atividade_fixos, não daqui. Cursos, período letivo e os
@@ -20,8 +22,8 @@ async function darPerfil(usuarioId: number, perfil: Perfil) {
 }
 
 /**
- * Em produção o login é pelo Entra ID, então a primeira secretaria precisa
- * ser um e-mail institucional real — vem do ambiente, nunca do código. Fora
+ * Em produção a primeira secretaria precisa ser um e-mail institucional real
+ * (é com ele que o Entra ID a reconhece) — vem do ambiente, nunca do código. Fora
  * de produção é a conta fixa do login falso (o botão de /login entra com ela).
  */
 function secretariaInicial(): { nome: string; email: string } {
@@ -37,11 +39,29 @@ function secretariaInicial(): { nome: string; email: string } {
   return { nome: process.env.SECRETARIA_INICIAL_NOME?.trim() || "Secretaria Acadêmica", email };
 }
 
+/**
+ * Sem o Entra ID configurado, a primeira secretaria só entra por senha — e
+ * senha só a secretaria define, então ninguém mais poderia dar a dela. Fica
+ * provisória e só é gravada se ela ainda não tiver uma: rodar o seed de novo
+ * não desfaz a senha que ela já trocou.
+ */
+async function definirSenhaInicial(usuario: { id: number; senhaHash: string | null }) {
+  const senha = process.env.SECRETARIA_INICIAL_SENHA;
+  if (!senha) return;
+  if (!usuario.senhaHash) {
+    await definirSenhaProvisoria(usuario.id, SchemaSenha.parse(senha), null);
+  }
+  // Senha esquecida no ambiente é credencial largada: depois do primeiro
+  // seed ela não serve para mais nada.
+  console.warn("SECRETARIA_INICIAL_SENHA já foi usada — apague-a do ambiente.");
+}
+
 export async function seed() {
   const inicial = secretariaInicial();
 
   const secretaria = await criarUsuario(inicial.nome, inicial.email);
   await darPerfil(secretaria.id, Perfil.SECRETARIA);
+  await definirSenhaInicial(secretaria);
 
   if (process.env.NODE_ENV !== "production") {
     await seedDesenvolvimento();
