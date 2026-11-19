@@ -225,6 +225,15 @@ Schema completo em `docs/SRHA-especificacao-desenvolvimento.md` §4. Copie de l�
   O próprio Postgres recusa, por triggers (migration `imutabilidade_aprovado_e_auditoria`),
   que também travam incluir, alterar ou remover item de relatório aprovado.
 - **Inativar, nunca excluir** curso, usuário ou tipo de atividade já referenciado.
+  Inativo não ganha vínculo novo, por tela nem planilha (`vincularDocente` e
+  `vincularCoordenador` recusam); os vínculos que já tem continuam.
+- **Curso tem `codigo`**, informado pela secretaria (ex.: ENF, DIR-01): único, de 2 a 20
+  letras sem acento, números ou hífen, sempre em maiúsculas — o CHECK da migration
+  `codigo_curso` garante, e o `@unique` então não deixa "enf" conviver com "ENF"
+  (`SchemaCodigoCurso` em `lib/curso.ts`). **Planilha acha curso pelo código, nunca pelo
+  nome**: nome digitado com erro caía em "não cadastrado" ou num curso de nome
+  parecido. O código pode ser editado — vínculos e relatórios apontam para o id.
+  Decisão de 2026-11-19, fora do `docs/`, cujo modelo de `Curso` não tem código.
 - **Tipos de atividade são lista fixa**, gravada pela migration `tipos_atividade_fixos` —
   sem tela de cadastro nem importação (decisão de 2026-10-26; diverge do RF03 do
   `docs/srha-docreq.pdf`, que previa cadastrar, alterar e inativar). Mudar a lista é
@@ -336,7 +345,7 @@ chamada + revalidação.
 | `/acompanhamento` | coord./secretaria | Situação de entrega por curso no período corrente |
 | `/arquivo` | todos | Navegação Ano › Semestre › Curso (filtro, não pasta) |
 | `/admin/cursos` | secretaria | CRUD de cursos |
-| `/admin/usuarios` | secretaria | CRUD de usuários, perfis e importação CSV |
+| `/admin/usuarios` | secretaria | CRUD de usuários, perfis, vínculos de cada pessoa e importação CSV |
 | `/admin/vinculos` | secretaria | Vínculos docente-curso e coordenador-curso — os dois lados da relação |
 | `/admin/periodos` | secretaria | Períodos letivos e prazos |
 
@@ -381,6 +390,28 @@ ganhar tela própria — só então migra pra dentro de `(dashboard)`.
 linha**, dentro ou fora do `(dashboard)` — o layout dele só evita duplicar a barra e
 a busca do usuário logado; não substitui a autorização por perfil, que é sempre da
 page ou da Server Action.
+
+---
+
+## Importação por planilha
+
+Regras em `lib/services/importacao.ts`, comuns a todo cadastro: tudo ou nada (qualquer
+linha com erro e nada é gravado), linha repetida na planilha é erro, reimportar a mesma
+planilha não muda nada, e **nenhuma planilha remove vínculo** — só acrescenta.
+
+- **Cursos:** código já cadastrado conta como existente, sem alterar o curso; código
+  novo com o nome de outro curso é recusado.
+- **Usuários** (decisão de 2026-11-19): e-mail já cadastrado tem o **nome e a
+  secretaria atualizados** pela planilha — a secretaria só se a coluna vier no
+  cabeçalho, para planilha só com nome e e-mail não tirar o perfil de ninguém; a regra
+  da última secretaria ativa vale aqui também. Colunas opcionais vinculam pelo código:
+  "Cursos como docente" (exige Ano e Semestre, porque o vínculo de docente é por
+  período) e "Cursos como coordenador", gravados na ordem da planilha (é ela que decide
+  o avaliador).
+- **Vínculos:** curso pelo código; docente e curso precisam estar ativos.
+
+Vínculo também se cria na linha de cada pessoa em `/admin/usuarios`, com o mesmo
+formulário de `/admin/vinculos` (`components/ModalVinculo.tsx`).
 
 ---
 

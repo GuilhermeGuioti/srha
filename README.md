@@ -114,9 +114,16 @@ O banco começa só com a secretaria. Cadastre, como ela, nesta ordem. Cada impo
 tem **Baixar modelo (CSV)** com o formato esperado.
 
 1. `/admin/periodos`: o período letivo, com o prazo de entrega aberto hoje.
-2. `/admin/cursos`: os cursos.
-3. `/admin/usuarios`: docentes e coordenadores, com os perfis.
-4. `/admin/vinculos`: cada docente ao curso no período e cada coordenador ao curso.
+2. `/admin/cursos`: os cursos, cada um com um **código** (ex.: ENF). É pelo código que
+   as planilhas acham o curso.
+3. `/admin/usuarios`: docentes e coordenadores. A planilha de usuários já pode vincular
+   cada pessoa, pelas colunas opcionais **Cursos como docente** (com Ano e Semestre) e
+   **Cursos como coordenador**, com os códigos separados por vírgula.
+4. Os vínculos que faltarem: em `/admin/vinculos`, ou na linha de cada pessoa em
+   `/admin/usuarios` (clique no nome).
+
+Reimportar a planilha de usuários atualiza o nome de quem já existe, e a Secretaria
+também se a coluna vier na planilha. Nenhuma planilha remove vínculo: só acrescenta.
 
 Nenhum relatório é criado: o relatório nasce quando o docente o começa.
 
