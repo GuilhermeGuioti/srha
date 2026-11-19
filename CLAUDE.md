@@ -163,22 +163,16 @@ E-mail é gravado e comparado em minúsculas — o `@unique` do banco diferencia
 
 ### Sem login de desenvolvimento
 
-**Não existe login falso, nem em desenvolvimento** (removido em 2026-11-19, para a
-entrega ao cliente). Não recrie provider, botão ou action que entre sem senha nem
-Microsoft. Os providers são os mesmos em todo ambiente: o de senha sempre, e o Entra ID
-só se `AUTH_MICROSOFT_ENTRA_ID_ID` estiver definida — sem ela o botão dele some do
-`/login`.
+**Não existe login falso, nem em desenvolvimento** (removido em 2026-11-19). Não recrie
+provider, botão ou action que entre sem senha nem Microsoft. Os providers são os mesmos
+em todo ambiente: o de senha sempre, e o Entra ID só se `AUTH_MICROSOFT_ENTRA_ID_ID`
+estiver definida — sem ela o botão dele some do `/login`.
 
-Fora de produção o seed cria um cenário de teste manual, sem senha nenhuma:
-
-- um docente vinculado a dois cursos
-- um coordenador de um curso
-- um coordenador que também dá aula no próprio curso (para testar a autoaprovação)
-- a secretaria `admin@srha.dev`
-
-Para entrar, rode o seed com `SECRETARIA_INICIAL_SENHA`, entre como `admin@srha.dev` e
-defina em `/admin/usuarios` a senha provisória de quem for usar — o mesmo caminho de
-produção.
+**O repositório não traz dados de teste para o banco** (2026-11-19): nem usuários
+fictícios no seed, nem gerador de cenário de exemplo. O seed é o mesmo em todo ambiente
+e cria só a secretaria inicial (§Ambiente local); cursos, períodos, os demais usuários e
+as senhas deles ela cadastra pelo sistema — o mesmo caminho de produção. Os testes
+automatizados continuam montando o próprio cenário, cada suíte no `srha_test`.
 
 ### Autorização
 
@@ -480,14 +474,12 @@ Iguais em desenvolvimento, diferentes em produção. Ver regra 2.
 No host o container fica na **5433**, não na 5432 padrão: assim não disputa a porta com
 outro Postgres rodando na máquina. Dentro do container continua 5432.
 
-O seed cria a secretaria inicial. Fora de produção é `admin@srha.dev`, e a
-`SECRETARIA_INICIAL_SENHA` é obrigatória para alguém entrar (§Sem login de
-desenvolvimento). Em produção — seed rodado com `NODE_ENV=production` — vem de
-`SECRETARIA_INICIAL_EMAIL` (e, opcional, `SECRETARIA_INICIAL_NOME`), porque o login é
-pelo Entra ID e precisa ser uma conta institucional real; sem a variável, o seed falha.
-Enquanto o Entra ID não estiver configurado, defina também `SECRETARIA_INICIAL_SENHA`:
-vira a senha provisória dela (só se ainda não tiver senha) — sem isso ninguém entra,
-porque só a secretaria define senha.
+O seed cria só a secretaria inicial, igual em todo ambiente. Ela vem de
+`SECRETARIA_INICIAL_EMAIL` (e, opcional, `SECRETARIA_INICIAL_NOME`) — em produção, a
+conta institucional real, porque é com ela que o Entra ID a reconhece; sem a variável, o
+seed falha. Enquanto o Entra ID não estiver configurado, e sempre em desenvolvimento,
+defina também `SECRETARIA_INICIAL_SENHA`: vira a senha provisória dela (só se ainda não
+tiver senha) — sem isso ninguém entra, porque só a secretaria define senha.
 
 O volume nomeado preserva os dados entre `docker compose down` e `up`. Para começar do
 zero, `docker compose down -v` e rode migrate e seed de novo — o seed é idempotente.

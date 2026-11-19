@@ -62,8 +62,9 @@ EOF
 | `AUTH_SECRET` | Assina a sessão do Auth.js |
 | `CHAVES_CARIMBO` | Chave do código de autenticidade do PDF. Sem ela, o PDF não é gerado |
 
-As outras chaves do `.env.example` são opcionais: as do Microsoft Entra ID (sem elas o
-botão da Microsoft não aparece no `/login`) e as do seed de produção.
+As outras chaves do `.env.example` são as do Microsoft Entra ID, opcionais (sem elas o
+botão da Microsoft não aparece no `/login`), e as do seed, passadas na linha do comando
+(passo 4).
 
 Nenhum `.env*` vai para o git, só os `.example`.
 
@@ -72,15 +73,19 @@ Nenhum `.env*` vai para o git, só os `.example`.
 ```bash
 npx prisma generate     # gera o client em generated/prisma
 npx prisma migrate dev  # aplica as migrations no banco srha
-SECRETARIA_INICIAL_SENHA="escolha-uma-senha" npx prisma db seed   # secretaria inicial + cenário de desenvolvimento
+SECRETARIA_INICIAL_EMAIL="voce@exemplo.com" SECRETARIA_INICIAL_SENHA="escolha-uma-senha" \
+  npx prisma db seed    # cria a primeira secretaria
 ```
 
 O `generate` é obrigatório: no Prisma 7 o `migrate dev` não gera mais o client, e sem
 ele o seed e a aplicação falham com `Cannot find module '../generated/prisma/...'`.
 
-A `SECRETARIA_INICIAL_SENHA` vira a senha provisória de `admin@srha.dev`, a secretaria
-criada pelo seed (8 a 128 caracteres). Sem ela ninguém entra: só a secretaria define
-senha. Ela vai na linha do comando, e não no `.env`, porque só serve na primeira vez.
+O seed cria só a primeira secretaria, com o e-mail de `SECRETARIA_INICIAL_EMAIL` (e o
+nome de `SECRETARIA_INICIAL_NOME`, se quiser). A `SECRETARIA_INICIAL_SENHA` vira a senha
+provisória dela (8 a 128 caracteres). Sem ela ninguém entra, porque só a secretaria
+define senha. As duas vão na linha do comando, e não no `.env`, porque só servem na
+primeira vez. Cursos, períodos e os outros usuários a secretaria cadastra pelo sistema
+(veja "Primeiro cadastro").
 
 ### 5. Subir a aplicação
 
@@ -94,7 +99,7 @@ Abra <http://localhost:3000>.
 
 ### Login por e-mail e senha
 
-1. Entre com `admin@srha.dev` e a senha passada ao seed. O sistema obriga a trocá-la
+1. Entre com o e-mail e a senha passados ao seed. O sistema obriga a trocá-la
    (`/trocar-senha`).
 2. Em `/admin/usuarios`, defina uma senha provisória para cada usuário que for usar.
 3. Saia e entre com o e-mail e essa senha. No primeiro acesso, cada um troca a sua.
@@ -103,19 +108,17 @@ Abra <http://localhost:3000>.
 Cinco senhas erradas seguidas bloqueiam o acesso por senha dessa conta por 15 minutos.
 Uma nova senha provisória definida pela secretaria desbloqueia.
 
-Usuários criados pelo seed (nenhum tem senha até a secretaria definir):
+### Primeiro cadastro
 
-| E-mail | Perfil |
-|---|---|
-| `helena@baraodemaua.br` | Docente em Fisioterapia e Nutrição, cada curso com um coordenador diferente |
-| `claudia@baraodemaua.br` | Coordena Fisioterapia |
-| `marcos@baraodemaua.br` | Coordena Nutrição |
-| `paulo@baraodemaua.br` | Coordena Educação Física e dá aula nele (autoaprovação) |
-| `admin@srha.dev` | Secretaria acadêmica |
+O banco começa só com a secretaria. Cadastre, como ela, nesta ordem. Cada importação
+tem **Baixar modelo (CSV)** com o formato esperado.
 
-O seed também cria os três cursos e o período letivo do semestre atual, aberto até
-quatro dias depois do dia em que rodou. Nenhum relatório é criado: o relatório nasce
-quando o docente o começa.
+1. `/admin/periodos`: o período letivo, com o prazo de entrega aberto hoje.
+2. `/admin/cursos`: os cursos.
+3. `/admin/usuarios`: docentes e coordenadores, com os perfis.
+4. `/admin/vinculos`: cada docente ao curso no período e cada coordenador ao curso.
+
+Nenhum relatório é criado: o relatório nasce quando o docente o começa.
 
 ### Microsoft Entra ID
 
@@ -125,46 +128,31 @@ três ou nenhuma). Isso depende do App registration da TI; veja os comentários 
 
 ## Roteiro de teste manual
 
-Cobre o fluxo inteiro com os usuários do seed. Faça em ordem. Antes, como
-`admin@srha.dev`, defina as senhas provisórias de `helena`, `claudia`, `marcos` e
-`paulo` em `/admin/usuarios`.
+Cobre o fluxo inteiro. Faça em ordem. Antes, cadastre (veja "Primeiro cadastro") dois
+cursos, A e B, cada um com seu coordenador; um docente vinculado aos dois; e um
+coordenador que também é docente do próprio curso. Defina a senha provisória de cada um.
 
-1. **Docente:** entre como `helena`. Na home, em Fisioterapia, clique em
+1. **Docente:** entre como o docente. Na home, no curso A, clique em
    **Começar relatório**, adicione itens (a linha nova aparece direto na lista, as horas
    vão de 0,5 em 0,5), clique em **Salvar rascunho** e depois em
    **Enviar para avaliação**. O total é recalculado sozinho.
-2. **Roteamento:** entre como `marcos`. Ele coordena Nutrição e não vê o relatório de
-   Fisioterapia. Entre como `claudia`: o relatório está na fila em `/avaliacao`.
-3. **Devolução:** como `claudia`, abra o relatório e use **Devolver para ajuste** (a
-   justificativa é obrigatória).
-4. **Correção e aprovação:** como `helena`, corrija e reenvie. Como `claudia`, clique em
-   **Aprovar**. A trilha de auditoria ao lado do relatório mostra os quatro eventos em
-   ordem, e o relatório aprovado não pode mais ser editado.
-5. **Autoaprovação:** entre como `paulo`, faça o relatório de Educação Física, envie e
-   aprove você mesmo em `/avaliacao`.
+2. **Roteamento:** entre como o coordenador de B: ele não vê o relatório do curso A.
+   Entre como o coordenador de A: o relatório está na fila em `/avaliacao`.
+3. **Devolução:** como coordenador de A, abra o relatório e use **Devolver para ajuste**
+   (a justificativa é obrigatória).
+4. **Correção e aprovação:** como o docente, corrija e reenvie. Como o coordenador de A,
+   clique em **Aprovar**. A trilha de auditoria ao lado do relatório mostra os quatro
+   eventos em ordem, e o relatório aprovado não pode mais ser editado.
+5. **Autoaprovação:** entre como o coordenador que também é docente, faça o relatório do
+   próprio curso, envie e aprove você mesmo em `/avaliacao`.
 6. **PDF e autenticidade:** em `/arquivo`, baixe o PDF de um relatório aprovado. Saia,
    abra `/validar` (há um link no `/login`), anexe o PDF ou digite o código impresso
    nele. A tela mostra o resumo oficial do relatório.
-7. **Secretaria:** entre como `admin@srha.dev`.
+7. **Secretaria:** entre como a secretaria.
    - `/acompanhamento`: situação de entrega por curso. Quem nunca abriu o relatório
      aparece como "não iniciado". Dali sai a extração CSV do período.
-   - `/admin/cursos`, `/admin/usuarios`, `/admin/vinculos` e `/admin/periodos`:
-     cadastros. Cada importação tem **Baixar modelo (CSV)** com o formato esperado.
    - A secretaria lê qualquer relatório, inclusive a trilha, mas não edita nem avalia.
 8. **Celular:** repita parte do fluxo com a tela em 360 px (modo responsivo do DevTools).
-
-### Dados de exemplo em escala média
-
-Para ver as telas cheias (10 cursos, cerca de 45 usuários, quatro períodos e 150
-relatórios em todas as situações), zere o banco de desenvolvimento e carregue o cenário:
-
-```bash
-npx prisma migrate reset   # apaga TUDO do banco srha e reaplica as migrations
-SECRETARIA_INICIAL_SENHA="escolha-uma-senha" npm run db:exemplo   # roda o seed e cria os dados de exemplo
-```
-
-Ao final, o script lista logins extras além dos do seed. Como os do seed, eles entram
-depois que a secretaria define a senha provisória.
 
 ## Testes automatizados
 
@@ -210,8 +198,7 @@ npx prisma generate
 `npx prisma generate`. Nunca use `prisma db push`, nem em desenvolvimento: toda mudança
 de schema precisa de uma migration versionada.
 
-**O prazo do período venceu:** o seed reabre a janela a partir de hoje. Rode
-`npx prisma db seed` de novo; ele é idempotente e não apaga nada.
+**O prazo do período venceu:** ajuste o encerramento em `/admin/periodos`.
 
 **Começar do zero (apaga os dois bancos):**
 
@@ -219,8 +206,8 @@ de schema precisa de uma migration versionada.
 docker compose down -v
 ```
 
-Depois repita os passos 2 e 4 de "Rodar pela primeira vez" e o `migrate deploy` do
-banco de testes.
+Depois repita os passos 2 e 4 de "Rodar pela primeira vez", o `migrate deploy` do banco
+de testes e o primeiro cadastro.
 
 ## Problemas comuns
 
@@ -231,17 +218,18 @@ banco de testes.
 | `the database system is starting up` | O Postgres ainda está iniciando. Espere alguns segundos (o `until ... pg_isready` do passo 2 faz isso) |
 | `config.test.ts` falha | O `.env.test` não existe ou não aponta para o `srha_test` |
 | Testes falham com tabela ou coluna inexistente | Falta migration no banco de testes: rode o `migrate deploy` com o `.env.test` |
-| Ninguém consegue entrar depois do seed | O seed rodou sem `SECRETARIA_INICIAL_SENHA` e `admin@srha.dev` ficou sem senha. Rode o seed de novo com a variável |
-| Esqueceu a senha de `admin@srha.dev` | O seed não sobrescreve senha já definida. Outra secretaria pode dar uma provisória; senão, zere o banco (`npx prisma migrate reset`) e rode o seed com a variável |
-| O docente não consegue começar ou enviar o relatório | O prazo do período venceu. Rode `npx prisma db seed` de novo |
+| O seed falha pedindo `SECRETARIA_INICIAL_EMAIL` | Ela é obrigatória em qualquer ambiente. Passe-a na linha do comando (passo 4) |
+| Ninguém consegue entrar depois do seed | O seed rodou sem `SECRETARIA_INICIAL_SENHA` e a secretaria ficou sem senha. Rode o seed de novo com as duas variáveis |
+| Esqueceu a senha da secretaria inicial | O seed não sobrescreve senha já definida. Outra secretaria pode dar uma provisória; em desenvolvimento, dá também para zerar o banco (`npx prisma migrate reset`) e rodar o seed de novo |
+| O docente não consegue começar ou enviar o relatório | O prazo do período venceu ou ainda não começou. Ajuste as datas em `/admin/periodos` |
 | O download do PDF falha | `CHAVES_CARIMBO` está vazia no `.env` |
 
 ## Seed em produção
 
-Rode com `NODE_ENV=production` e `SECRETARIA_INICIAL_EMAIL` (e, se quiser,
-`SECRETARIA_INICIAL_NOME`) com a conta institucional de quem vai administrar o sistema.
-Sem essa variável o seed falha, em vez de criar uma conta que não existe no Entra ID. O
-cenário de desenvolvimento não é criado em produção.
+O mesmo comando do passo 4, com a conta institucional de quem vai administrar o sistema
+em `SECRETARIA_INICIAL_EMAIL` (e, se quiser, `SECRETARIA_INICIAL_NOME`): é com ela que o
+Entra ID a reconhece. Sem essa variável o seed falha, em vez de criar uma conta que não
+existe.
 
 Enquanto o Entra ID não estiver configurado, defina também `SECRETARIA_INICIAL_SENHA`.
 Ela vira a senha provisória da secretaria (só se ela ainda não tiver senha), trocada no
