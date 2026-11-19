@@ -26,6 +26,10 @@ export async function acaoCriarPeriodo(
     const validado = SchemaPeriodo.parse(dados); // 2. zod
     const id = await criarPeriodo(validado); // 3. serviço
     revalidatePath("/admin/periodos"); // 4. revalidação
+    // O período novo nasce com os docentes do anterior.
+    revalidatePath("/admin/vinculos");
+    revalidatePath("/admin/usuarios");
+    revalidatePath("/admin/cursos");
     return { ok: true, dados: { id } };
   } catch (erro) {
     return paraResultadoErro(erro);

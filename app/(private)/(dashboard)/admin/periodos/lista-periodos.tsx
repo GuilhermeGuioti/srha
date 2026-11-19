@@ -164,7 +164,11 @@ export function ListaPeriodos({ periodos }: { periodos: PeriodoLinha[] }) {
         aberto={modalAberto}
         eyebrow="ADMINISTRAÇÃO · PERÍODOS"
         titulo={periodoEmEdicao ? "Editar período" : "Novo período"}
-        descricao="Fora da janela entre abertura e encerramento, a submissão do relatório é bloqueada."
+        descricao={
+          periodoEmEdicao
+            ? "Fora da janela entre abertura e encerramento, a submissão do relatório é bloqueada."
+            : "Fora da janela entre abertura e encerramento, a submissão do relatório é bloqueada. O período já nasce com os docentes vinculados no período anterior; quem saiu ou entrou se ajusta em Vínculos."
+        }
         onFechar={() => setModalAberto(false)}
         rodape={
           <>

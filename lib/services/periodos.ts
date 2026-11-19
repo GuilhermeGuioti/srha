@@ -1,4 +1,5 @@
 import { prisma } from "../db";
+import { copiarVinculosDoPeriodoAnterior } from "./vinculos";
 
 export type DadosPeriodo = {
   ano: number;
@@ -24,11 +25,16 @@ function exigirPrazosValidos(dados: DadosPeriodo): void {
   }
 }
 
+// O período novo nasce com os docentes do anterior: sem isso, a secretaria
+// vinculava todo mundo de novo a cada semestre.
 export async function criarPeriodo(dados: DadosPeriodo): Promise<number> {
   await exigirPeriodoDisponivel(dados.ano, dados.semestre);
   exigirPrazosValidos(dados);
-  const periodo = await prisma.periodoLetivo.create({ data: dados });
-  return periodo.id;
+  return prisma.$transaction(async (tx) => {
+    const periodo = await tx.periodoLetivo.create({ data: dados });
+    await copiarVinculosDoPeriodoAnterior(tx, periodo.id);
+    return periodo.id;
+  });
 }
 
 export async function atualizarPeriodo(id: number, dados: DadosPeriodo): Promise<void> {

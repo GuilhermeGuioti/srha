@@ -4,6 +4,7 @@ import { useId, useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Modal } from "./Modal";
 import { Pill } from "./Pill";
+import { AvisoConcluido } from "./AvisoConcluido";
 import { BotaoPrimario } from "./BotaoPrimario";
 import { BotaoSecundario } from "./BotaoSecundario";
 import { MensagemErro } from "./MensagemErro";
@@ -219,16 +220,7 @@ export function ImportadorPlanilha({
             </section>
           )}
 
-          {resultado?.gravado && (
-            <section role="status" className="flex flex-col gap-2">
-              <div>
-                <Pill cor="aprovado" forma="circulo">
-                  Importação concluída
-                </Pill>
-              </div>
-              <p className="text-[15px] text-tinta">{resumoSucesso(resultado)}</p>
-            </section>
-          )}
+          {resultado?.gravado && <AvisoConcluido rotulo="Importação concluída">{resumoSucesso(resultado)}</AvisoConcluido>}
         </form>
       </Modal>
     </>

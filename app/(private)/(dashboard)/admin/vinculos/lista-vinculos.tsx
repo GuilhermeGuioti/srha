@@ -23,6 +23,7 @@ import {
   acaoImportarVinculosDocente,
   acaoImportarVinculosCoordenador,
 } from "./acoes";
+import { TrazerVinculos } from "./trazer-vinculos";
 
 type Periodo = { id: number; rotulo: string };
 type Curso = { id: number; codigo: string; nome: string };
@@ -129,6 +130,7 @@ export function ListaVinculos({
               titulo="Docentes por curso"
               acao={
                 <>
+                  <TrazerVinculos periodos={periodos} />
                   <ImportadorPlanilha
                     modelo={MODELOS_IMPORTACAO.vinculosDocente}
                     eyebrow="ADMINISTRAÇÃO · VÍNCULOS"

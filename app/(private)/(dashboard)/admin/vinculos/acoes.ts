@@ -9,6 +9,8 @@ import {
   desvincularDocente,
   vincularCoordenador,
   desvincularCoordenador,
+  trazerVinculosDoPeriodoAnterior,
+  type ResultadoContinuidade,
 } from "../../../../../lib/services/vinculos";
 import { SchemaArquivoPlanilha, type ResultadoImportacao } from "../../../../../lib/importacao";
 import { importarVinculosDocente, importarVinculosCoordenador } from "../../../../../lib/services/importacao";
@@ -69,6 +71,20 @@ export async function acaoDesvincularCoordenador(id: number): Promise<Resultado<
     await desvincularCoordenador(validado.id);
     revalidarTelasDeVinculo();
     return { ok: true, dados: undefined };
+  } catch (erro) {
+    return paraResultadoErro(erro);
+  }
+}
+
+export async function acaoTrazerVinculosDoPeriodoAnterior(
+  periodoLetivoId: number,
+): Promise<Resultado<ResultadoContinuidade>> {
+  try {
+    await exigirPerfil(Perfil.SECRETARIA);
+    const validado = SchemaId.parse({ id: periodoLetivoId });
+    const resultado = await trazerVinculosDoPeriodoAnterior(validado.id);
+    revalidarTelasDeVinculo();
+    return { ok: true, dados: resultado };
   } catch (erro) {
     return paraResultadoErro(erro);
   }

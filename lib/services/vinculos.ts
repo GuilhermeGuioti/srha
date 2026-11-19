@@ -1,5 +1,5 @@
 import { prisma } from "../db";
-import { Perfil } from "../../generated/prisma/client";
+import { Perfil, Prisma } from "../../generated/prisma/client";
 import { sincronizarPerfil } from "./perfis";
 
 export async function listarVinculosDocente() {
@@ -102,4 +102,47 @@ export async function desvincularCoordenador(vinculoId: number): Promise<void> {
     const restam = await tx.vinculoCoordenadorCurso.count({ where: { coordenadorId: vinculo.coordenadorId } });
     await sincronizarPerfil(tx, vinculo.coordenadorId, Perfil.COORDENADOR, restam > 0);
   });
+}
+
+export type ResultadoContinuidade = { origem: { ano: number; semestre: number } | null; trazidos: number };
+
+/**
+ * Continuidade entre semestres: traz para o período os vínculos de docente do
+ * período anterior — o cadastrado logo antes dele por ano e semestre, não o
+ * último criado —, só de docente e curso ativos. Só acrescenta: quem saiu do
+ * curso a secretaria tira à mão. Não cria relatório: a linha de Relatorio
+ * continua nascendo sob demanda, e quem nunca abrir o sistema aparece como
+ * "não iniciado" no painel (RF18).
+ */
+export async function copiarVinculosDoPeriodoAnterior(
+  tx: Prisma.TransactionClient,
+  periodoLetivoId: number,
+): Promise<ResultadoContinuidade> {
+  const periodo = await tx.periodoLetivo.findUnique({ where: { id: periodoLetivoId } });
+  if (!periodo) {
+    throw new Error("Período letivo não encontrado.");
+  }
+  const anterior = await tx.periodoLetivo.findFirst({
+    where: { OR: [{ ano: { lt: periodo.ano } }, { ano: periodo.ano, semestre: { lt: periodo.semestre } }] },
+    orderBy: [{ ano: "desc" }, { semestre: "desc" }],
+  });
+  if (!anterior) {
+    return { origem: null, trazidos: 0 };
+  }
+  // Quem tem vínculo no anterior já tem o perfil de docente (sincronizarPerfil
+  // só o tira quando não sobra vínculo nenhum): não há perfil a acertar.
+  const vinculos = await tx.vinculoDocenteCurso.findMany({
+    where: { periodoLetivoId: anterior.id, docente: { ativo: true }, curso: { ativo: true } },
+    select: { docenteId: true, cursoId: true },
+    orderBy: { id: "asc" },
+  });
+  const { count } = await tx.vinculoDocenteCurso.createMany({
+    data: vinculos.map((vinculo) => ({ ...vinculo, periodoLetivoId })),
+    skipDuplicates: true,
+  });
+  return { origem: { ano: anterior.ano, semestre: anterior.semestre }, trazidos: count };
+}
+
+export async function trazerVinculosDoPeriodoAnterior(periodoLetivoId: number): Promise<ResultadoContinuidade> {
+  return prisma.$transaction((tx) => copiarVinculosDoPeriodoAnterior(tx, periodoLetivoId));
 }
