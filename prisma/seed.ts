@@ -24,7 +24,7 @@ async function darPerfil(usuarioId: number, perfil: Perfil) {
 /**
  * Em produção a primeira secretaria precisa ser um e-mail institucional real
  * (é com ele que o Entra ID a reconhece) — vem do ambiente, nunca do código. Fora
- * de produção é a conta fixa do login falso (o botão de /login entra com ela).
+ * de produção é uma conta fixa, que entra com a senha de SECRETARIA_INICIAL_SENHA.
  */
 function secretariaInicial(): { nome: string; email: string } {
   if (process.env.NODE_ENV !== "production") {
@@ -71,10 +71,11 @@ export async function seed() {
 }
 
 /**
- * Cenário de teste do login falso (CLAUDE.md § Login falso para
- * desenvolvimento): um docente em dois cursos com coordenadores diferentes,
- * um coordenador de um curso só, e um coordenador que também dá aula no
- * próprio curso — para testar a autoaprovação.
+ * Cenário de teste manual: um docente em dois cursos com coordenadores
+ * diferentes, um coordenador de um curso só, e um coordenador que também dá
+ * aula no próprio curso — para testar a autoaprovação. Ninguém aqui tem
+ * senha: a secretaria define as provisórias em /admin/usuarios, como em
+ * produção.
  *
  * Não cria nenhum Relatorio: a linha nasce sob demanda, no primeiro clique do
  * docente. É isso que faz "não iniciado" existir no painel.
@@ -147,7 +148,8 @@ async function seedDesenvolvimento() {
 
   console.log(
     [
-      "Cenário de desenvolvimento pronto. Entre pelo campo de e-mail em /login:",
+      "Cenário de desenvolvimento pronto. Entre como admin@srha.dev (senha de SECRETARIA_INICIAL_SENHA)",
+      "e defina em /admin/usuarios a senha provisória de quem for usar:",
       "  helena@baraodemaua.br   docente em Fisioterapia e Nutrição (coordenadores diferentes)",
       "  claudia@baraodemaua.br  coordena Fisioterapia",
       "  marcos@baraodemaua.br   coordena Nutrição",

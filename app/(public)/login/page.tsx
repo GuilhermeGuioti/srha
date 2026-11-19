@@ -9,7 +9,6 @@ import { Pill } from "../../../components/Pill";
 import { entraConfigurado } from "../../../lib/auth/config";
 import { LIMITE_TENTATIVAS_SENHA, MINUTOS_BLOQUEIO_SENHA } from "../../../lib/auth/login";
 import { TAMANHO_MAXIMO_SENHA } from "../../../lib/senha";
-import { AcessoDev } from "./acesso-dev";
 import { acaoEntrarComMicrosoft, acaoEntrarComSenha } from "./acoes";
 
 // `erro` vem das actions desta tela (e do guard, para usuário inativado);
@@ -149,8 +148,6 @@ export default async function LoginPage(props: PageProps<"/login">) {
               Validar documento
             </LinkTexto>
           </p>
-
-          {process.env.NODE_ENV === "development" && <AcessoDev />}
         </CartaoPublico>
       </section>
     </main>

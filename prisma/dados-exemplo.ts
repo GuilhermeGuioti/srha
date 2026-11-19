@@ -9,7 +9,7 @@ import { seed } from "./seed";
 //
 //   npx prisma migrate reset --force && npm run db:exemplo
 //
-// Chama o seed antes (idempotente), então os usuários do login falso estão no
+// Chama o seed antes (idempotente), então os usuários do seed estão no
 // meio dos dados. Sorteio com semente fixa: o banco sai igual toda vez.
 //
 // Grava direto pelo Prisma, não pelo workflow: o workflow carimba tudo com a
@@ -421,7 +421,7 @@ async function main() {
         });
 
         let roteiro = sortearRoteiro(periodo.aberto);
-        // Casos fixos dos usuários do login falso, para cada tela ter o que mostrar.
+        // Casos fixos dos usuários do seed, para cada tela ter o que mostrar.
         if (docente.id === helena.id) {
           if (periodo.aberto) {
             roteiro = idCurso === cursoId("Fisioterapia") ? { situacao: "RASCUNHO" } : null;

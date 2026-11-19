@@ -27,16 +27,3 @@ export async function acaoEntrarComSenha(formData: FormData): Promise<void> {
     senha: String(formData.get("senha") ?? ""),
   });
 }
-
-// Login falso, só em desenvolvimento: entra como qualquer usuário cadastrado,
-// sem senha nem Microsoft. Fora dele o provider "dev" nem existe; a trava
-// aqui é para a action não ficar chamável à toa no build de produção.
-export async function acaoEntrarComoAdmin(): Promise<void> {
-  if (process.env.NODE_ENV !== "development") redirect("/login");
-  await entrar("dev", { email: "admin@srha.dev" });
-}
-
-export async function acaoEntrarComEmail(formData: FormData): Promise<void> {
-  if (process.env.NODE_ENV !== "development") redirect("/login");
-  await entrar("dev", { email: String(formData.get("email") ?? "") });
-}

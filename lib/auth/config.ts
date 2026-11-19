@@ -2,7 +2,6 @@ import NextAuth from "next-auth";
 import type { Provider } from "next-auth/providers";
 import Credentials from "next-auth/providers/credentials";
 import MicrosoftEntraID from "next-auth/providers/microsoft-entra-id";
-import { prisma } from "../db";
 import { lerConfiguracaoEntra } from "./entra";
 import { buscarUsuarioPelaSenha, buscarUsuarioPeloPerfilEntra } from "./login";
 
@@ -25,20 +24,6 @@ function texto(valor: unknown): string {
 function paraUsuarioDaSessao(usuario: { id: number; nome: string; email: string; versaoSessao: number }) {
   return { id: String(usuario.id), name: usuario.nome, email: usuario.email, versaoSessao: usuario.versaoSessao };
 }
-
-// Login falso de desenvolvimento (CLAUDE.md § Login falso para desenvolvimento).
-const providerDev = Credentials({
-  id: "dev",
-  name: "Login de desenvolvimento",
-  credentials: { email: { label: "E-mail", type: "text" } },
-  async authorize(credentials) {
-    const email = texto(credentials?.email).trim().toLowerCase();
-    if (!email) return null;
-    // Não achou de jeito nenhum: nega o acesso. Nunca cria usuário automaticamente.
-    const usuario = await prisma.usuario.findUnique({ where: { email, ativo: true } });
-    return usuario ? paraUsuarioDaSessao(usuario) : null;
-  },
-});
 
 // E-mail e senha definidos pela secretaria (decisão de 2026-11-03, CLAUDE.md regra 3).
 const providerSenha = Credentials({
@@ -71,7 +56,6 @@ if (entra) {
     }),
   );
 }
-if (process.env.NODE_ENV === "development") providers.push(providerDev);
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   providers,
