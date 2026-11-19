@@ -241,6 +241,15 @@ Schema completo em `docs/SRHA-especificacao-desenvolvimento.md` §4. Copie de l�
   `tipoAtividadeId` — não copie o nome para o item.
 - **Vínculo docente-curso com relatório não pode ser removido.** Arquivo e painel partem
   dos vínculos — sem ele, o relatório (mesmo aprovado) sumiria da consulta.
+- **Vínculo docente-curso é por período, com continuidade** (decisão de 2026-11-19): o
+  período novo nasce com os vínculos de docente do anterior — o de ano e semestre logo
+  antes, não o último cadastrado —, só de docente e curso ativos
+  (`copiarVinculosDoPeriodoAnterior` em `lib/services/vinculos.ts`, chamada por
+  `criarPeriodo`). Só acrescenta: quem saiu a secretaria tira à mão. Em `/admin/vinculos`,
+  "Trazer do período anterior" repete a cópia para um período já criado. Copia
+  vínculo, nunca relatório — "não iniciados" continua saindo da diferença. O vínculo
+  contínuo, sem período, foi descartado: mudava painel, arquivo, home e envio, e
+  obrigava a encerrar o vínculo de quem sai.
 - **Sempre há ao menos uma secretaria ativa.** Inativar ou tirar o perfil da última é
   recusado — sem ela, ninguém mais cadastra nem reativa.
 - **Horas em múltiplos de 0,5**, no máximo 999,5 por item (zod da action, igual ao
