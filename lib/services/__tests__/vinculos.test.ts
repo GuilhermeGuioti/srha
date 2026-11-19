@@ -6,7 +6,8 @@ import {
   desvincularDocente,
   vincularCoordenador,
   desvincularCoordenador,
-  trazerVinculosDoPeriodoAnterior,
+  previaRenovacao,
+  renovarVinculos,
 } from "../vinculos";
 import { criarPeriodo } from "../periodos";
 import { Perfil } from "../../../generated/prisma/client";
@@ -153,7 +154,7 @@ test("usuário ou curso inativo não ganha vínculo novo, de docente nem de coor
   expect(await prisma.vinculoCoordenadorCurso.count()).toBe(0);
 });
 
-describe("continuidade entre semestres", () => {
+describe("renovação de semestre", () => {
   const prazos = (ano: number, semestre: number) => ({
     ano,
     semestre,
@@ -170,53 +171,108 @@ describe("continuidade entre semestres", () => {
     return vinculos.map((vinculo) => `${vinculo.docente.nome} em ${vinculo.curso.codigo}`);
   }
 
-  test("período novo nasce com os docentes do anterior, só de docente e curso ativos, sem relatório", async () => {
-    const { docente, curso, outroCurso, periodo } = await obterAmbiente();
-    const saiu = await prisma.usuario.create({ data: { nome: "Saulo", email: "saulo@srha.dev" } });
+  // 2026/2 com Helena em FIS e ENF, Ana em FIS e Saulo (inativado) em FIS.
+  async function semestreAnterior() {
+    const ambiente = await obterAmbiente();
+    const { docente, curso, outroCurso, periodo } = ambiente;
+    const [ana, saulo] = await Promise.all([
+      prisma.usuario.create({ data: { nome: "Ana", email: "ana@srha.dev" } }),
+      prisma.usuario.create({ data: { nome: "Saulo", email: "saulo@srha.dev" } }),
+    ]);
     await vincularDocente(docente.id, curso.id, periodo.id);
     await vincularDocente(docente.id, outroCurso.id, periodo.id);
-    await vincularDocente(saiu.id, curso.id, periodo.id);
-    await prisma.usuario.update({ where: { id: saiu.id }, data: { ativo: false } });
-    await prisma.curso.update({ where: { id: outroCurso.id }, data: { ativo: false } });
+    await vincularDocente(ana.id, curso.id, periodo.id);
+    await vincularDocente(saulo.id, curso.id, periodo.id);
+    await prisma.usuario.update({ where: { id: saulo.id }, data: { ativo: false } });
+    return { ...ambiente, ana, saulo };
+  }
+
+  test("período novo nasce sem docente: a renovação é que traz", async () => {
+    await semestreAnterior();
 
     const novo = await criarPeriodo(prazos(2027, 1));
 
-    expect(await docentesDo(novo)).toEqual(["Helena em FIS"]);
-    // O anterior fica como estava, e nenhum relatório nasce antes da hora.
-    expect(await docentesDo(periodo.id)).toHaveLength(3);
+    expect(await docentesDo(novo)).toEqual([]);
+  });
+
+  test("a prévia mostra por curso, em ordem alfabética, só quem dá para renovar", async () => {
+    const { docente, curso, outroCurso, ana } = await semestreAnterior();
+    const novo = await criarPeriodo(prazos(2027, 1));
+
+    expect(await previaRenovacao(novo)).toEqual({
+      destino: { ano: 2027, semestre: 1 },
+      origem: { ano: 2026, semestre: 2 },
+      cursos: [
+        { id: outroCurso.id, codigo: "ENF", nome: "Enfermagem", docentes: [{ id: docente.id, nome: "Helena" }] },
+        {
+          id: curso.id,
+          codigo: "FIS",
+          nome: "Fisioterapia",
+          docentes: [
+            { id: ana.id, nome: "Ana" },
+            { id: docente.id, nome: "Helena" },
+          ],
+        },
+      ],
+      jaNoPeriodo: 0,
+      inativos: 1,
+    });
+  });
+
+  test("renovar grava só os marcados, sem relatório; o que já está não volta na prévia", async () => {
+    const { docente, curso, outroCurso, ana } = await semestreAnterior();
+    const novo = await criarPeriodo(prazos(2027, 1));
+
+    // Ana saiu: a secretaria desmarcou.
+    const resultado = await renovarVinculos(novo, [
+      { docenteId: docente.id, cursoId: curso.id },
+      { docenteId: docente.id, cursoId: outroCurso.id },
+    ]);
+
+    expect(resultado).toEqual({ origem: { ano: 2026, semestre: 2 }, renovados: 2 });
+    expect(await docentesDo(novo)).toEqual(["Helena em FIS", "Helena em ENF"]);
     expect(await prisma.relatorio.count()).toBe(0);
+
+    const depois = await previaRenovacao(novo);
+    expect(depois.cursos).toEqual([
+      { id: curso.id, codigo: "FIS", nome: "Fisioterapia", docentes: [{ id: ana.id, nome: "Ana" }] },
+    ]);
+    expect(depois.jaNoPeriodo).toBe(2);
+  });
+
+  test("renovar recusa par fora do período anterior ou que deixou de valer, sem gravar nada", async () => {
+    const { docente, curso, saulo } = await semestreAnterior();
+    const novo = await criarPeriodo(prazos(2027, 1));
+    const enfermagem = await prisma.curso.findUniqueOrThrow({ where: { codigo: "ENF" } });
+    await prisma.vinculoDocenteCurso.deleteMany({ where: { cursoId: enfermagem.id } });
+
+    for (const intruso of [
+      { docenteId: docente.id, cursoId: enfermagem.id }, // não está mais no anterior
+      { docenteId: saulo.id, cursoId: curso.id }, // inativo
+    ]) {
+      await expect(renovarVinculos(novo, [{ docenteId: docente.id, cursoId: curso.id }, intruso])).rejects.toThrow(
+        "A lista mudou desde que a renovação foi aberta. Abra de novo e confira.",
+      );
+    }
+    expect(await docentesDo(novo)).toEqual([]);
   });
 
   test("o anterior é o de ano e semestre logo antes, não o último cadastrado", async () => {
-    const { docente, curso, outroCurso, periodo } = await obterAmbiente(); // 2026/2
-    await vincularDocente(docente.id, curso.id, periodo.id);
+    await semestreAnterior(); // 2026/2
 
-    // Cadastrado depois, mas mais antigo: não há período antes dele.
     const antigo = await criarPeriodo(prazos(2026, 1));
-    expect(await docentesDo(antigo)).toEqual([]);
-    await vincularDocente(docente.id, outroCurso.id, antigo);
-
-    // 2027/1 vem de 2026/2, não de 2026/1.
-    const novo = await criarPeriodo(prazos(2027, 1));
-    expect(await docentesDo(novo)).toEqual(["Helena em FIS"]);
-  });
-
-  test("trazer de novo só acrescenta o que falta no período", async () => {
-    const { docente, curso, outroCurso, periodo } = await obterAmbiente();
-    await vincularDocente(docente.id, curso.id, periodo.id);
     const novo = await criarPeriodo(prazos(2027, 1));
 
-    // Vínculo acrescentado no semestre anterior depois de criar o novo.
-    await vincularDocente(docente.id, outroCurso.id, periodo.id);
-
-    expect(await trazerVinculosDoPeriodoAnterior(novo)).toEqual({ origem: { ano: 2026, semestre: 2 }, trazidos: 1 });
-    expect(await trazerVinculosDoPeriodoAnterior(novo)).toEqual({ origem: { ano: 2026, semestre: 2 }, trazidos: 0 });
-    expect(await docentesDo(novo)).toEqual(["Helena em FIS", "Helena em ENF"]);
+    expect((await previaRenovacao(antigo)).origem).toBeNull();
+    expect((await previaRenovacao(novo)).origem).toEqual({ ano: 2026, semestre: 2 });
   });
 
-  test("sem período anterior, não há o que trazer", async () => {
-    const { periodo } = await obterAmbiente();
+  test("sem período anterior, não há o que renovar", async () => {
+    const { docente, curso, periodo } = await obterAmbiente();
 
-    expect(await trazerVinculosDoPeriodoAnterior(periodo.id)).toEqual({ origem: null, trazidos: 0 });
+    expect(await previaRenovacao(periodo.id)).toMatchObject({ origem: null, cursos: [] });
+    await expect(renovarVinculos(periodo.id, [{ docenteId: docente.id, cursoId: curso.id }])).rejects.toThrow(
+      "Não há período anterior a este cadastrado — nada a renovar.",
+    );
   });
 });

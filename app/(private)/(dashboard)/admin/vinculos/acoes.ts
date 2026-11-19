@@ -9,8 +9,9 @@ import {
   desvincularDocente,
   vincularCoordenador,
   desvincularCoordenador,
-  trazerVinculosDoPeriodoAnterior,
-  type ResultadoContinuidade,
+  previaRenovacao,
+  renovarVinculos,
+  type PreviaRenovacao,
 } from "../../../../../lib/services/vinculos";
 import { SchemaArquivoPlanilha, type ResultadoImportacao } from "../../../../../lib/importacao";
 import { importarVinculosDocente, importarVinculosCoordenador } from "../../../../../lib/services/importacao";
@@ -76,13 +77,29 @@ export async function acaoDesvincularCoordenador(id: number): Promise<Resultado<
   }
 }
 
-export async function acaoTrazerVinculosDoPeriodoAnterior(
-  periodoLetivoId: number,
-): Promise<Resultado<ResultadoContinuidade>> {
+// Só lê: abre a renovação com os docentes do período anterior, por curso.
+export async function acaoPreviaRenovacao(periodoLetivoId: number): Promise<Resultado<PreviaRenovacao>> {
   try {
     await exigirPerfil(Perfil.SECRETARIA);
     const validado = SchemaId.parse({ id: periodoLetivoId });
-    const resultado = await trazerVinculosDoPeriodoAnterior(validado.id);
+    return { ok: true, dados: await previaRenovacao(validado.id) };
+  } catch (erro) {
+    return paraResultadoErro(erro);
+  }
+}
+
+const SchemaRenovacao = z.object({
+  periodoLetivoId: Id,
+  selecionados: z.array(z.object({ docenteId: Id, cursoId: Id })).min(1, "Marque ao menos um docente.").max(10_000),
+});
+
+export async function acaoRenovarVinculos(
+  dados: z.infer<typeof SchemaRenovacao>,
+): Promise<Resultado<{ origem: { ano: number; semestre: number } | null; renovados: number }>> {
+  try {
+    await exigirPerfil(Perfil.SECRETARIA);
+    const validado = SchemaRenovacao.parse(dados);
+    const resultado = await renovarVinculos(validado.periodoLetivoId, validado.selecionados);
     revalidarTelasDeVinculo();
     return { ok: true, dados: resultado };
   } catch (erro) {

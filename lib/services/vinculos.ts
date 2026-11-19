@@ -104,45 +104,110 @@ export async function desvincularCoordenador(vinculoId: number): Promise<void> {
   });
 }
 
-export type ResultadoContinuidade = { origem: { ano: number; semestre: number } | null; trazidos: number };
+// Renovação de semestre: o período novo começa sem docente, e a secretaria
+// traz os do período anterior escolhendo quem continua — sem isso, vinculava
+// todo mundo de novo a cada semestre. "Anterior" é o cadastrado logo antes por
+// ano e semestre, não o último criado. Copia vínculo, nunca relatório: a linha
+// de Relatorio continua nascendo sob demanda, e quem nunca abrir o sistema
+// aparece como "não iniciado" no painel (RF18).
 
-/**
- * Continuidade entre semestres: traz para o período os vínculos de docente do
- * período anterior — o cadastrado logo antes dele por ano e semestre, não o
- * último criado —, só de docente e curso ativos. Só acrescenta: quem saiu do
- * curso a secretaria tira à mão. Não cria relatório: a linha de Relatorio
- * continua nascendo sob demanda, e quem nunca abrir o sistema aparece como
- * "não iniciado" no painel (RF18).
- */
-export async function copiarVinculosDoPeriodoAnterior(
-  tx: Prisma.TransactionClient,
-  periodoLetivoId: number,
-): Promise<ResultadoContinuidade> {
-  const periodo = await tx.periodoLetivo.findUnique({ where: { id: periodoLetivoId } });
+type Rotulo = { ano: number; semestre: number };
+
+export type PreviaRenovacao = {
+  destino: Rotulo;
+  origem: Rotulo | null;
+  // Só o que dá para renovar: docente e curso ativos, ainda fora do destino.
+  cursos: { id: number; codigo: string; nome: string; docentes: { id: number; nome: string }[] }[];
+  jaNoPeriodo: number;
+  inativos: number;
+};
+
+export type ParRenovacao = { docenteId: number; cursoId: number };
+
+async function periodoEAnterior(cliente: Prisma.TransactionClient, periodoLetivoId: number) {
+  const periodo = await cliente.periodoLetivo.findUnique({ where: { id: periodoLetivoId } });
   if (!periodo) {
     throw new Error("Período letivo não encontrado.");
   }
-  const anterior = await tx.periodoLetivo.findFirst({
+  const anterior = await cliente.periodoLetivo.findFirst({
     where: { OR: [{ ano: { lt: periodo.ano } }, { ano: periodo.ano, semestre: { lt: periodo.semestre } }] },
     orderBy: [{ ano: "desc" }, { semestre: "desc" }],
   });
-  if (!anterior) {
-    return { origem: null, trazidos: 0 };
-  }
-  // Quem tem vínculo no anterior já tem o perfil de docente (sincronizarPerfil
-  // só o tira quando não sobra vínculo nenhum): não há perfil a acertar.
-  const vinculos = await tx.vinculoDocenteCurso.findMany({
-    where: { periodoLetivoId: anterior.id, docente: { ativo: true }, curso: { ativo: true } },
-    select: { docenteId: true, cursoId: true },
-    orderBy: { id: "asc" },
-  });
-  const { count } = await tx.vinculoDocenteCurso.createMany({
-    data: vinculos.map((vinculo) => ({ ...vinculo, periodoLetivoId })),
-    skipDuplicates: true,
-  });
-  return { origem: { ano: anterior.ano, semestre: anterior.semestre }, trazidos: count };
+  return { periodo, anterior };
 }
 
-export async function trazerVinculosDoPeriodoAnterior(periodoLetivoId: number): Promise<ResultadoContinuidade> {
-  return prisma.$transaction((tx) => copiarVinculosDoPeriodoAnterior(tx, periodoLetivoId));
+async function montarPrevia(cliente: Prisma.TransactionClient, periodoLetivoId: number): Promise<PreviaRenovacao> {
+  const { periodo, anterior } = await periodoEAnterior(cliente, periodoLetivoId);
+  const destino = { ano: periodo.ano, semestre: periodo.semestre };
+  if (!anterior) {
+    return { destino, origem: null, cursos: [], jaNoPeriodo: 0, inativos: 0 };
+  }
+  const [doAnterior, doDestino] = await Promise.all([
+    cliente.vinculoDocenteCurso.findMany({
+      where: { periodoLetivoId: anterior.id },
+      include: { docente: true, curso: true },
+    }),
+    cliente.vinculoDocenteCurso.findMany({ where: { periodoLetivoId }, select: { docenteId: true, cursoId: true } }),
+  ]);
+  const presentes = new Set(doDestino.map((vinculo) => `${vinculo.docenteId}|${vinculo.cursoId}`));
+
+  let jaNoPeriodo = 0;
+  let inativos = 0;
+  const porCurso = new Map<number, PreviaRenovacao["cursos"][number]>();
+  for (const vinculo of doAnterior) {
+    if (presentes.has(`${vinculo.docenteId}|${vinculo.cursoId}`)) {
+      jaNoPeriodo++;
+    } else if (!vinculo.docente.ativo || !vinculo.curso.ativo) {
+      inativos++;
+    } else {
+      const curso = porCurso.get(vinculo.cursoId) ?? {
+        id: vinculo.curso.id,
+        codigo: vinculo.curso.codigo,
+        nome: vinculo.curso.nome,
+        docentes: [],
+      };
+      curso.docentes.push({ id: vinculo.docente.id, nome: vinculo.docente.nome });
+      porCurso.set(vinculo.cursoId, curso);
+    }
+  }
+  const emOrdem = (a: { nome: string }, b: { nome: string }) => a.nome.localeCompare(b.nome, "pt-BR");
+  const cursos = [...porCurso.values()].sort(emOrdem);
+  for (const curso of cursos) curso.docentes.sort(emOrdem);
+  return { destino, origem: { ano: anterior.ano, semestre: anterior.semestre }, cursos, jaNoPeriodo, inativos };
+}
+
+export async function previaRenovacao(periodoLetivoId: number): Promise<PreviaRenovacao> {
+  return prisma.$transaction((tx) => montarPrevia(tx, periodoLetivoId));
+}
+
+/**
+ * Grava os vínculos escolhidos na prévia. Cada par precisa ser renovável
+ * agora — tela aberta há tempo pode ter par que outra pessoa já vinculou
+ * (é pulado) ou que deixou de valer (docente inativado: recusa tudo).
+ * Quem tem vínculo no anterior já tem o perfil de docente: não há perfil a
+ * acertar.
+ */
+export async function renovarVinculos(
+  periodoLetivoId: number,
+  selecionados: ParRenovacao[],
+): Promise<{ origem: Rotulo | null; renovados: number }> {
+  return prisma.$transaction(async (tx) => {
+    const { anterior } = await periodoEAnterior(tx, periodoLetivoId);
+    if (!anterior) {
+      throw new Error("Não há período anterior a este cadastrado — nada a renovar.");
+    }
+    const renovaveis = await tx.vinculoDocenteCurso.findMany({
+      where: { periodoLetivoId: anterior.id, docente: { ativo: true }, curso: { ativo: true } },
+      select: { docenteId: true, cursoId: true },
+    });
+    const permitidos = new Set(renovaveis.map((par) => `${par.docenteId}|${par.cursoId}`));
+    if (selecionados.some((par) => !permitidos.has(`${par.docenteId}|${par.cursoId}`))) {
+      throw new Error("A lista mudou desde que a renovação foi aberta. Abra de novo e confira.");
+    }
+    const { count } = await tx.vinculoDocenteCurso.createMany({
+      data: selecionados.map((par) => ({ ...par, periodoLetivoId })),
+      skipDuplicates: true,
+    });
+    return { origem: { ano: anterior.ano, semestre: anterior.semestre }, renovados: count };
+  });
 }

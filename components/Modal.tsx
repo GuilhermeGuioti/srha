@@ -15,7 +15,9 @@ type ModalProps = {
 };
 
 // <dialog> nativo dá foco preso, fechamento por Esc e ::backdrop de graça —
-// evita reimplementar isso à mão.
+// evita reimplementar isso à mão. Na altura da tela, no máximo: só o meio
+// rola, e título e botões do rodapé ficam sempre à vista, também no celular.
+// `open:flex` e não `flex`: fechado, o <dialog> precisa continuar display:none.
 export function Modal({ aberto, eyebrow, titulo, descricao, onFechar, children, rodape }: ModalProps) {
   const ref = useRef<HTMLDialogElement>(null);
 
@@ -33,9 +35,9 @@ export function Modal({ aberto, eyebrow, titulo, descricao, onFechar, children, 
       onClick={(evento) => {
         if (evento.target === ref.current) onFechar();
       }}
-      className="m-auto w-[calc(100%-2rem)] max-w-lg overflow-hidden rounded-3xl border border-borda bg-superficie p-0 text-tinta shadow-flutuante backdrop:bg-[#0b2235]/55 backdrop:backdrop-blur-[2px] open:animate-surgir"
+      className="m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg overflow-hidden rounded-3xl border border-borda bg-superficie p-0 text-tinta shadow-flutuante backdrop:bg-[#0b2235]/55 backdrop:backdrop-blur-[2px] open:flex open:animate-surgir open:flex-col"
     >
-      <div className="flex items-start justify-between gap-5 px-6 pt-6 pb-5">
+      <div className="flex flex-none items-start justify-between gap-5 px-6 pt-6 pb-5">
         <div className="min-w-0">
           <Sobretitulo>{eyebrow}</Sobretitulo>
           <h2 className="mt-2 text-[22px] font-extrabold tracking-tight">{titulo}</h2>
@@ -52,8 +54,8 @@ export function Modal({ aberto, eyebrow, titulo, descricao, onFechar, children, 
           <IconeFechar className="h-5 w-5" />
         </button>
       </div>
-      <div className="border-t border-borda px-6 py-6">{children}</div>
-      <div className="flex flex-wrap items-center justify-end gap-3 border-t border-borda bg-superficie-sutil px-6 py-4">
+      <div className="min-h-0 overflow-y-auto border-t border-borda px-6 py-6">{children}</div>
+      <div className="flex flex-none flex-wrap items-center justify-end gap-3 border-t border-borda bg-superficie-sutil px-6 py-4">
         {rodape}
       </div>
     </dialog>

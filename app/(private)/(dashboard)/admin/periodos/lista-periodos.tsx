@@ -12,6 +12,8 @@ import { AbasFiltro } from "../../../../../components/AbasFiltro";
 import { AcaoTabela } from "../../../../../components/AcaoTabela";
 import { IconeEditar } from "../../../../../components/Icones";
 import { MensagemErro } from "../../../../../components/MensagemErro";
+import { ModalRenovacao } from "../../../../../components/ModalRenovacao";
+import type { PreviaRenovacao } from "../../../../../lib/services/vinculos";
 import {
   SituacaoPeriodoPill,
   situacaoPeriodo,
@@ -19,6 +21,7 @@ import {
 } from "../../../../../components/SituacaoPeriodo";
 import { formatarDataHora } from "../../../../../lib/formato";
 import { acaoCriarPeriodo, acaoAtualizarPeriodo } from "./acoes";
+import { acaoPreviaRenovacao, acaoRenovarVinculos } from "../vinculos/acoes";
 
 type PeriodoLinha = {
   id: number;
@@ -46,6 +49,8 @@ export function ListaPeriodos({ periodos }: { periodos: PeriodoLinha[] }) {
   const [erro, setErro] = useState<string | null>(null);
   const [pendente, startTransition] = useTransition();
   const [aba, setAba] = useState<ChaveSituacaoPeriodo | "TODOS">("TODOS");
+  // Período recém-criado com docentes no anterior a renovar.
+  const [renovacao, setRenovacao] = useState<{ periodoId: number; previa: PreviaRenovacao } | null>(null);
 
   const visiveis = periodos.filter((periodo) => aba === "TODOS" || situacaoPeriodo(periodo) === aba);
   const contagem = (chave: ChaveSituacaoPeriodo) =>
@@ -90,6 +95,15 @@ export function ListaPeriodos({ periodos }: { periodos: PeriodoLinha[] }) {
       }
       setModalAberto(false);
       router.refresh();
+      // Período novo nasce sem docente: se o anterior tem quem renovar, a
+      // renovação já abre. Sem nada a trazer (primeiro período, por exemplo),
+      // não abre nada.
+      if (!periodoEmEdicao && resultado.dados) {
+        const previa = await acaoPreviaRenovacao(resultado.dados.id);
+        if (previa.ok && previa.dados.cursos.length > 0) {
+          setRenovacao({ periodoId: resultado.dados.id, previa: previa.dados });
+        }
+      }
     });
   }
 
@@ -167,7 +181,7 @@ export function ListaPeriodos({ periodos }: { periodos: PeriodoLinha[] }) {
         descricao={
           periodoEmEdicao
             ? "Fora da janela entre abertura e encerramento, a submissão do relatório é bloqueada."
-            : "Fora da janela entre abertura e encerramento, a submissão do relatório é bloqueada. O período já nasce com os docentes vinculados no período anterior; quem saiu ou entrou se ajusta em Vínculos."
+            : "Fora da janela entre abertura e encerramento, a submissão do relatório é bloqueada. Ao salvar, você confere os docentes do período anterior que continuam neste."
         }
         onFechar={() => setModalAberto(false)}
         rodape={
@@ -226,6 +240,17 @@ export function ListaPeriodos({ periodos }: { periodos: PeriodoLinha[] }) {
           </Campo>
         </form>
       </Modal>
+
+      {renovacao && (
+        <ModalRenovacao
+          eyebrow="ADMINISTRAÇÃO · PERÍODOS"
+          onFechar={() => setRenovacao(null)}
+          periodoId={renovacao.periodoId}
+          previaInicial={renovacao.previa}
+          carregarPrevia={acaoPreviaRenovacao}
+          renovar={acaoRenovarVinculos}
+        />
+      )}
     </div>
   );
 }

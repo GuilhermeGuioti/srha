@@ -4,7 +4,9 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { LinkTexto } from "../../../../../components/LinkTexto";
 import { BotaoPrimario } from "../../../../../components/BotaoPrimario";
-import { ModalVinculo, type TipoVinculo } from "../../../../../components/ModalVinculo";
+import { BotaoSecundario } from "../../../../../components/BotaoSecundario";
+import { ModalRenovacao } from "../../../../../components/ModalRenovacao";
+import type { TipoVinculo } from "../../../../../components/CamposVinculo";
 import { NomeCurso } from "../../../../../components/NomeCurso";
 import { Destaque } from "../../../../../components/Destaque";
 import { SeletorFiltro } from "../../../../../components/SeletorFiltro";
@@ -17,13 +19,14 @@ import { ImportadorPlanilha } from "../../../../../components/ImportadorPlanilha
 import { MODELOS_IMPORTACAO } from "../../../../../lib/importacao";
 import { useBusca } from "../../../../../lib/hooks/useBusca";
 import {
-  acaoVincular,
+  acaoPreviaRenovacao,
+  acaoRenovarVinculos,
   acaoDesvincularDocente,
   acaoDesvincularCoordenador,
   acaoImportarVinculosDocente,
   acaoImportarVinculosCoordenador,
 } from "./acoes";
-import { TrazerVinculos } from "./trazer-vinculos";
+import { ModalVinculo } from "./modal-vinculo";
 
 type Periodo = { id: number; rotulo: string };
 type Curso = { id: number; codigo: string; nome: string };
@@ -61,9 +64,9 @@ export function ListaVinculos({
   usuarios: Opcao[];
 }) {
   const router = useRouter();
+  // Os modais são montados só abertos, para o formulário abrir zerado.
   const [modo, setModo] = useState<TipoVinculo | null>(null);
-  // Nova a cada abertura: o formulário do vínculo abre zerado (ModalVinculo).
-  const [abertura, setAbertura] = useState(0);
+  const [renovando, setRenovando] = useState(false);
   const [, startTransition] = useTransition();
   const buscaDocentes = useBusca();
   const buscaCoordenadores = useBusca();
@@ -86,7 +89,6 @@ export function ListaVinculos({
 
   function abrirNovo(novoModo: TipoVinculo) {
     setModo(novoModo);
-    setAbertura((atual) => atual + 1);
   }
 
   function remover(tipoVinculo: TipoVinculo, id: number, rotulo: string) {
@@ -130,7 +132,7 @@ export function ListaVinculos({
               titulo="Docentes por curso"
               acao={
                 <>
-                  <TrazerVinculos periodos={periodos} />
+                  <BotaoSecundario onClick={() => setRenovando(true)}>Renovar do período anterior</BotaoSecundario>
                   <ImportadorPlanilha
                     modelo={MODELOS_IMPORTACAO.vinculosDocente}
                     eyebrow="ADMINISTRAÇÃO · VÍNCULOS"
@@ -273,21 +275,26 @@ export function ListaVinculos({
         </section>
       </div>
 
-      <ModalVinculo
-        key={abertura}
-        aberto={modo !== null}
-        onFechar={() => setModo(null)}
-        eyebrow="ADMINISTRAÇÃO · VÍNCULOS"
-        titulo={modo === "docente" ? "Vincular docente a um curso" : "Vincular coordenador a um curso"}
-        cursos={cursos}
-        periodos={periodos}
-        tipo={modo ?? "docente"}
-        pessoa={{
-          rotulo: modo === "docente" ? "Docente" : "Coordenador",
-          opcoes: usuarios.map((usuario) => ({ id: usuario.id, rotulo: usuario.nome })),
-        }}
-        vincular={acaoVincular}
-      />
+      {modo && (
+        <ModalVinculo
+          tipo={modo}
+          onFechar={() => setModo(null)}
+          cursos={cursos}
+          periodos={periodos}
+          pessoas={usuarios.map((usuario) => ({ id: usuario.id, rotulo: usuario.nome }))}
+        />
+      )}
+
+      {renovando && periodos.length > 0 && (
+        <ModalRenovacao
+          eyebrow="ADMINISTRAÇÃO · VÍNCULOS"
+          onFechar={() => setRenovando(false)}
+          periodoId={periodos[0].id}
+          periodos={periodos}
+          carregarPrevia={acaoPreviaRenovacao}
+          renovar={acaoRenovarVinculos}
+        />
+      )}
     </div>
   );
 }
