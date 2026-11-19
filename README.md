@@ -131,6 +131,12 @@ cursos ativos). Desmarque quem saiu e confirme; depois, vincule quem entrou. Coo
 não depende de período e continua como está. Para renovar de novo um período já criado,
 use **Renovar do período anterior** em `/admin/vinculos`.
 
+**Período encerrado não muda.** Depois do encerramento da submissão, os vínculos de
+docente daquele período ficam como estão: nenhuma tela, renovação ou planilha acrescenta
+ou remove. Esqueceu alguém? Estenda o encerramento em `/admin/periodos`, corrija e volte
+a data. Ano e semestre de período com relatório aprovado também não mudam, porque o PDF
+emitido traz o período; as datas mudam sempre.
+
 Nenhum relatório é criado: o relatório nasce quando o docente o começa.
 
 ### Microsoft Entra ID
@@ -235,6 +241,7 @@ de testes e o primeiro cadastro.
 | Ninguém consegue entrar depois do seed | O seed rodou sem `SECRETARIA_INICIAL_SENHA` e a secretaria ficou sem senha. Rode o seed de novo com as duas variáveis |
 | Esqueceu a senha da secretaria inicial | O seed não sobrescreve senha já definida. Outra secretaria pode dar uma provisória; em desenvolvimento, dá também para zerar o banco (`npx prisma migrate reset`) e rodar o seed de novo |
 | O docente não consegue começar ou enviar o relatório | O prazo do período venceu ou ainda não começou. Ajuste as datas em `/admin/periodos` |
+| "O período … já foi encerrado" ao vincular ou remover docente | Período encerrado não muda. Se for mesmo preciso, estenda o encerramento em `/admin/periodos` |
 | O download do PDF falha | `CHAVES_CARIMBO` está vazia no `.env` |
 
 ## Seed em produção

@@ -241,6 +241,14 @@ Schema completo em `docs/SRHA-especificacao-desenvolvimento.md` §4. Copie de l�
   `tipoAtividadeId` — não copie o nome para o item.
 - **Vínculo docente-curso com relatório não pode ser removido.** Arquivo e painel partem
   dos vínculos — sem ele, o relatório (mesmo aprovado) sumiria da consulta.
+- **Período encerrado não muda** (decisão de 2026-11-19): passado o
+  `encerramentoSubmissao`, os vínculos de docente dele não ganham nem perdem ninguém —
+  `vincularDocente`, `desvincularDocente`, a renovação (como destino) e as planilhas
+  recusam (`periodoEncerrado` em `lib/periodo.ts`, a mesma leitura do selo
+  "Encerrado"). As telas não oferecem o período nem o botão de remover. Coordenação
+  não tem período e não é afetada. Para corrigir, a secretaria estende o encerramento.
+  E **ano e semestre de período com relatório aprovado não mudam** (`atualizarPeriodo`):
+  o PDF emitido traz o período, e a `/validar` passaria a mostrar outro; as datas mudam.
 - **Vínculo docente-curso é por período, com renovação** (decisões de 2026-11-19): o
   período novo nasce sem docente, e a renovação traz os do anterior — o de ano e
   semestre logo antes, não o último cadastrado. Ela mostra por curso quem dá para
