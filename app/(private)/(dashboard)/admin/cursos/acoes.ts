@@ -14,7 +14,8 @@ const SchemaId = z.number().int().positive();
 
 const SchemaCurso = z.object({
   codigo: SchemaCodigoCurso,
-  nome: z.string().trim().min(1, "Informe o nome do curso."),
+  // Espaço repetido no meio do nome não faz outro curso.
+  nome: z.string().trim().min(1, "Informe o nome do curso.").transform((nome) => nome.replace(/\s+/g, " ")),
   ativo: z.boolean(),
 });
 

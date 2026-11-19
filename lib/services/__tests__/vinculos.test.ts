@@ -154,6 +154,10 @@ test("usuário ou curso inativo não ganha vínculo novo, de docente nem de coor
   expect(await prisma.vinculoCoordenadorCurso.count()).toBe(0);
 });
 
+test("remover vínculo de coordenador que não existe mais dá mensagem clara", async () => {
+  await expect(desvincularCoordenador(999)).rejects.toThrow("Vínculo não encontrado.");
+});
+
 describe("renovação de semestre", () => {
   const prazos = (ano: number, semestre: number) => ({
     ano,

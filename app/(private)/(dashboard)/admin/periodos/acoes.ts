@@ -18,6 +18,15 @@ const SchemaPeriodo = z.object({
 
 export type DadosFormularioPeriodo = z.infer<typeof SchemaPeriodo>;
 
+// O período aparece nos formulários e listas de vínculo e no total de
+// docentes de cada curso.
+function revalidarTelasDePeriodo(): void {
+  revalidatePath("/admin/periodos");
+  revalidatePath("/admin/vinculos");
+  revalidatePath("/admin/usuarios");
+  revalidatePath("/admin/cursos");
+}
+
 export async function acaoCriarPeriodo(
   dados: DadosFormularioPeriodo,
 ): Promise<Resultado<{ id: number }>> {
@@ -25,10 +34,7 @@ export async function acaoCriarPeriodo(
     await exigirPerfil(Perfil.SECRETARIA); // 1. guard
     const validado = SchemaPeriodo.parse(dados); // 2. zod
     const id = await criarPeriodo(validado); // 3. serviço
-    revalidatePath("/admin/periodos"); // 4. revalidação
-    // O período novo aparece nos formulários de vínculo das outras telas.
-    revalidatePath("/admin/vinculos");
-    revalidatePath("/admin/usuarios");
+    revalidarTelasDePeriodo(); // 4. revalidação
     return { ok: true, dados: { id } };
   } catch (erro) {
     return paraResultadoErro(erro);
@@ -44,7 +50,7 @@ export async function acaoAtualizarPeriodo(
     const idValidado = SchemaId.parse(id);
     const validado = SchemaPeriodo.parse(dados);
     await atualizarPeriodo(idValidado, validado);
-    revalidatePath("/admin/periodos");
+    revalidarTelasDePeriodo();
     return { ok: true, dados: undefined };
   } catch (erro) {
     return paraResultadoErro(erro);

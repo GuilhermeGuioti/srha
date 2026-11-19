@@ -98,6 +98,11 @@ export async function vincularCoordenador(coordenadorId: number, cursoId: number
 
 export async function desvincularCoordenador(vinculoId: number): Promise<void> {
   await prisma.$transaction(async (tx) => {
+    // Removido em outra aba: sem isto, o delete lançava o erro cru do Prisma na tela.
+    const existente = await tx.vinculoCoordenadorCurso.findUnique({ where: { id: vinculoId } });
+    if (!existente) {
+      throw new Error("Vínculo não encontrado.");
+    }
     const vinculo = await tx.vinculoCoordenadorCurso.delete({ where: { id: vinculoId } });
     const restam = await tx.vinculoCoordenadorCurso.count({ where: { coordenadorId: vinculo.coordenadorId } });
     await sincronizarPerfil(tx, vinculo.coordenadorId, Perfil.COORDENADOR, restam > 0);

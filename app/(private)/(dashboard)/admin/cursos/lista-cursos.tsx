@@ -30,7 +30,7 @@ type CursoLinha = {
   totalDocentes: number;
 };
 
-export function ListaCursos({ cursos }: { cursos: CursoLinha[] }) {
+export function ListaCursos({ cursos, periodoRotulo }: { cursos: CursoLinha[]; periodoRotulo: string | null }) {
   const router = useRouter();
   const [aba, setAba] = useState<"ativos" | "inativos">("ativos");
   const [modalAberto, setModalAberto] = useState(false);
@@ -148,7 +148,7 @@ export function ListaCursos({ cursos }: { cursos: CursoLinha[] }) {
               curso.coordenadores.length > 0 ? curso.coordenadores.join(", ") : "sem coordenação definida",
           },
           {
-            cabecalho: "Docentes",
+            cabecalho: periodoRotulo ? `Docentes em ${periodoRotulo}` : "Docentes",
             alinhado: "direita",
             classeCelula: "font-mono font-medium tabular-nums",
             render: (curso) => curso.totalDocentes,

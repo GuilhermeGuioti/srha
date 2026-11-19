@@ -1,4 +1,5 @@
 import { prisma } from "../db";
+import { SituacaoRelatorio } from "../../generated/prisma/client";
 
 export type DadosPeriodo = {
   ano: number;
@@ -33,8 +34,24 @@ export async function criarPeriodo(dados: DadosPeriodo): Promise<number> {
   return periodo.id;
 }
 
+// As datas sempre podem mudar (estender o prazo, reabrir). Ano e semestre não,
+// se o período já tem relatório aprovado: o PDF emitido traz o período, e a
+// /validar passaria a mostrar outro — o papel verdadeiro pareceria falso.
 export async function atualizarPeriodo(id: number, dados: DadosPeriodo): Promise<void> {
   await exigirPeriodoDisponivel(dados.ano, dados.semestre, id);
   exigirPrazosValidos(dados);
+  const atual = await prisma.periodoLetivo.findUnique({ where: { id } });
+  if (!atual) {
+    throw new Error("Período letivo não encontrado.");
+  }
+  const mudaRotulo = atual.ano !== dados.ano || atual.semestre !== dados.semestre;
+  if (
+    mudaRotulo &&
+    (await prisma.relatorio.count({ where: { periodoLetivoId: id, situacao: SituacaoRelatorio.APROVADO } })) > 0
+  ) {
+    throw new Error(
+      `O período ${atual.ano}/${atual.semestre} tem relatório aprovado — o ano e o semestre não podem mudar, porque o PDF emitido traz o período. As datas podem.`,
+    );
+  }
   await prisma.periodoLetivo.update({ where: { id }, data: dados });
 }

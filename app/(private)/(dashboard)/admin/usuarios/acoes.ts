@@ -24,6 +24,14 @@ const SchemaUsuario = z.object({
 
 export type DadosFormularioUsuario = z.infer<typeof SchemaUsuario>;
 
+// Nome e situação da pessoa aparecem também nos vínculos (lista e escolha de
+// quem vincular) e na coordenação de cada curso.
+function revalidarTelasDeUsuario(): void {
+  revalidatePath("/admin/usuarios");
+  revalidatePath("/admin/vinculos");
+  revalidatePath("/admin/cursos");
+}
+
 export async function acaoCriarUsuario(
   dados: DadosFormularioUsuario,
 ): Promise<Resultado<{ id: number }>> {
@@ -31,7 +39,7 @@ export async function acaoCriarUsuario(
     await exigirPerfil(Perfil.SECRETARIA); // 1. guard
     const validado = SchemaUsuario.parse(dados); // 2. zod
     const id = await criarUsuario(validado); // 3. serviço
-    revalidatePath("/admin/usuarios"); // 4. revalidação
+    revalidarTelasDeUsuario(); // 4. revalidação
     return { ok: true, dados: { id } };
   } catch (erro) {
     return paraResultadoErro(erro);
@@ -47,7 +55,7 @@ export async function acaoAtualizarUsuario(
     const idValidado = SchemaId.parse(id);
     const validado = SchemaUsuario.parse(dados);
     await atualizarUsuario(idValidado, validado);
-    revalidatePath("/admin/usuarios");
+    revalidarTelasDeUsuario();
     return { ok: true, dados: undefined };
   } catch (erro) {
     return paraResultadoErro(erro);
@@ -72,10 +80,8 @@ export async function acaoImportarUsuarios(formulario: FormData): Promise<Result
     await exigirPerfil(Perfil.SECRETARIA);
     const arquivo = SchemaArquivoPlanilha.parse(formulario.get("arquivo"));
     const resultado = await importarUsuarios(new Uint8Array(await arquivo.arrayBuffer()));
-    // As colunas de cursos criam vínculos, que aparecem nestas telas também.
-    revalidatePath("/admin/usuarios");
-    revalidatePath("/admin/vinculos");
-    revalidatePath("/admin/cursos");
+    // As colunas de cursos também criam vínculos.
+    revalidarTelasDeUsuario();
     return { ok: true, dados: resultado };
   } catch (erro) {
     return paraResultadoErro(erro);
