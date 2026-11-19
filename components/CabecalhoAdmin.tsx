@@ -6,8 +6,8 @@ import { classeCartao } from "./Cartao";
 export const classeTituloTela = "text-2xl font-extrabold tracking-tight text-tinta sm:text-[28px]";
 export const classeTituloSecao = "text-lg font-bold tracking-tight text-tinta";
 
-// Nível 1 é o cabeçalho da tela, em cartão próprio (como as páginas do App do
-// Dono); nível 2 é título de seção, solto sobre o papel.
+// Nível 1 é o cabeçalho da tela, em cartão próprio; nível 2 é título de seção,
+// solto sobre o papel.
 export function CabecalhoAdmin({
   titulo,
   subtitulo,

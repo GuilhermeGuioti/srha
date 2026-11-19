@@ -38,7 +38,7 @@ export default async function LoginPage(props: PageProps<"/login">) {
 
   return (
     <main className="flex flex-1">
-      {/* Painel da marca, como o do App do Dono. Só aparece do lg para cima —
+      {/* Painel da marca. Só aparece do lg para cima —
           abaixo disso ele espremeria o cartão; a marca vai para o topo dele. */}
       <section className="relative hidden w-[45%] flex-col justify-between overflow-hidden p-12 text-white [background-image:var(--gradiente-marca)] lg:flex">
         <div aria-hidden className="pointer-events-none absolute -top-20 -right-20 h-80 w-80 rounded-full bg-white/[.06]" />

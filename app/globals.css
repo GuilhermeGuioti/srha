@@ -76,8 +76,8 @@
 }
 
 @theme {
-  /* Sombras levemente azuladas, como as do App do Dono: o cartão se
-     destaca do papel sem parecer flutuar. */
+  /* Sombras levemente azuladas: o cartão se destaca do papel sem parecer
+     flutuar. */
   --shadow-cartao: 0 1px 2px rgb(16 42 67 / 0.04), 0 4px 20px rgb(0 103 158 / 0.06);
   --shadow-cartao-elevado: 0 2px 4px rgb(16 42 67 / 0.05), 0 14px 36px rgb(0 103 158 / 0.14);
   --shadow-botao: 0 4px 14px rgb(0 103 158 / 0.25);

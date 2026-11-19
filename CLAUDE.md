@@ -574,9 +574,9 @@ anos do RNF09.
 novo quando já houver equivalente, não troque paleta nem tipografia. Se faltar algo,
 pergunte antes de criar.
 
-**Acabamento revisado a pedido (decisão de 2026-10-26)**, tendo como referência o painel
-web do App do Dono. A estrutura do mockup continua valendo (telas, fluxo, o que aparece
-em cada uma); mudou o acabamento, e ele diverge do `docs/` nestes pontos:
+**Acabamento revisado a pedido (decisão de 2026-10-26).** A estrutura do mockup continua
+valendo (telas, fluxo, o que aparece em cada uma); mudou o acabamento, e ele diverge do
+`docs/` nestes pontos:
 
 - **Tipografia:** Inter na interface e nos títulos, no lugar de IBM Plex Sans e Serif.
   Números continuam em IBM Plex Mono com figuras tabulares. O PDF não mudou e segue com
@@ -591,10 +591,10 @@ em cada uma); mudou o acabamento, e ele diverge do `docs/` nestes pontos:
   todo bloco de conteúdo é cartão (`components/Cartao.tsx`, ou `classeCartao` quando o
   elemento é `<Link>`, `<nav>` ou tabela); estado vazio de tela inteira em
   `components/AvisoVazio.tsx`.
-- **Identidade própria (2026-10-27):** o que era cópia direta do App do Dono deu lugar
-  a elementos do SRHA, sem mexer em paleta, tipografia nem estrutura. Barra superior
-  com fio azul + verde-água no topo (`--faixa-marca`) e página atual sublinhada em
-  `--acento-forte`; relatório aprovado com carimbo no cabeçalho
+- **Identidade própria (2026-10-27):** elementos do SRHA, sem mexer em paleta,
+  tipografia nem estrutura. Barra superior com fio azul + verde-água no topo
+  (`--faixa-marca`) e página atual sublinhada em `--acento-forte`; relatório aprovado
+  com carimbo no cabeçalho
   (`components/Carimbo.tsx`, sem o código de autenticidade, que fica só no papel);
   início da secretaria no layout de referência que o usuário enviou: saudação solta
   sobre o papel (só nessa tela o cabeçalho não é cartão), três indicadores (cursos
