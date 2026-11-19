@@ -4,7 +4,8 @@ O docente declara as horas de atividades do semestre, o coordenador do curso apr
 devolve, e tudo fica numa trilha de auditoria imutável.
 
 Next.js (App Router) + TypeScript + Prisma 7 + PostgreSQL + Auth.js v5. As regras do
-projeto estão no `CLAUDE.md`; a especificação completa, em `docs/`.
+projeto estão no `CLAUDE.md`; a especificação completa, em `docs/`. Para colocar no ar,
+veja [Publicar em produção](#publicar-em-produção).
 
 ## Pré-requisitos
 
@@ -78,7 +79,8 @@ SECRETARIA_INICIAL_EMAIL="voce@exemplo.com" SECRETARIA_INICIAL_SENHA="escolha-um
 ```
 
 O `generate` é obrigatório: no Prisma 7 o `migrate dev` não gera mais o client, e sem
-ele o seed e a aplicação falham com `Cannot find module '../generated/prisma/...'`.
+ele o seed e a aplicação falham com `Cannot find module '../generated/prisma/...'`. O
+`npm run build` já o roda antes do build.
 
 O seed cria só a primeira secretaria, com o e-mail de `SECRETARIA_INICIAL_EMAIL` (e o
 nome de `SECRETARIA_INICIAL_NOME`, se quiser). A `SECRETARIA_INICIAL_SENHA` vira a senha
@@ -142,8 +144,8 @@ Nenhum relatório é criado: o relatório nasce quando o docente o começa.
 ### Microsoft Entra ID
 
 Sobe quando `AUTH_MICROSOFT_ENTRA_ID_ID`, `_SECRET` e `_ISSUER` estão preenchidas (as
-três ou nenhuma). Isso depende do App registration da TI; veja os comentários no
-`.env.example`.
+três ou nenhuma). Isso depende do App registration da TI; veja
+[Publicar em produção](#publicar-em-produção).
 
 ## Roteiro de teste manual
 
@@ -243,18 +245,92 @@ de testes e o primeiro cadastro.
 | O docente não consegue começar ou enviar o relatório | O prazo do período venceu ou ainda não começou. Ajuste as datas em `/admin/periodos` |
 | "O período … já foi encerrado" ao vincular ou remover docente | Período encerrado não muda. Se for mesmo preciso, estenda o encerramento em `/admin/periodos` |
 | O download do PDF falha | `CHAVES_CARIMBO` está vazia no `.env` |
+| Login recusado com `UntrustedHost`, fora da Vercel | Falta `AUTH_TRUST_HOST=true` |
 
-## Seed em produção
+## Publicar em produção
 
-O mesmo comando do passo 4, com a conta institucional de quem vai administrar o sistema
-em `SECRETARIA_INICIAL_EMAIL` (e, se quiser, `SECRETARIA_INICIAL_NOME`): é com ela que o
-Entra ID a reconhece. Sem essa variável o seed falha, em vez de criar uma conta que não
-existe.
+O sistema foi pensado para a Vercel com um PostgreSQL gerenciado, mas não depende de
+nenhum dos dois: nenhum código conhece o provedor, e a diferença entre ambientes é só de
+variável de ambiente.
 
-Enquanto o Entra ID não estiver configurado, defina também `SECRETARIA_INICIAL_SENHA`.
-Ela vira a senha provisória da secretaria (só se ela ainda não tiver senha), trocada no
-primeiro acesso. Apague a variável depois do seed.
+### 1. Banco
 
-Em produção, `DATABASE_URL` passa pelo pooler e `DIRECT_URL` é a conexão direta.
-Nunca remova nem altere uma versão de `CHAVES_CARIMBO`: os PDFs já impressos com ela
-deixariam de ser válidos. Detalhes no `CLAUDE.md`.
+PostgreSQL 16, a mesma versão do container, com duas conexões:
+
+- **pelo pooler** do provedor, em modo transaction, para a aplicação (`DATABASE_URL`).
+  Sem pooler, o pico dos dias antes do prazo esgota as conexões do banco;
+- **direta**, sem pooler, para o `prisma migrate` (`DIRECT_URL`), que não funciona
+  através de pooler em modo transaction.
+
+Se uma migration falhar, não a resolva apontando a `DATABASE_URL` para a conexão direta.
+
+### 2. Migrations e seed
+
+De uma máquina com o repositório e o `npm ci` feitos, apontando para o banco de produção
+(variável passada na linha do comando vale mais que a do `.env`):
+
+```bash
+npx prisma generate
+DIRECT_URL="<conexão direta>" npx prisma migrate deploy
+DATABASE_URL="<conexão direta>" SECRETARIA_INICIAL_EMAIL="<e-mail institucional>" \
+  SECRETARIA_INICIAL_SENHA="<senha provisória>" npx prisma db seed
+```
+
+- O `migrate deploy` aplica só as migrations que faltam. Rode-o **antes** de publicar
+  toda versão que trouxer pasta nova em `prisma/migrations`. Em produção, nunca
+  `migrate dev` nem `db push`.
+- O seed é só da primeira vez. O e-mail é a conta institucional de quem vai
+  administrar o sistema (o nome vem de `SECRETARIA_INICIAL_NOME`, se quiser): é com ela
+  que o Entra ID a reconhece. Sem ele o seed falha, em vez de criar uma conta que não
+  existe.
+- Enquanto o Entra ID não estiver no ar, a `SECRETARIA_INICIAL_SENHA` é o único jeito
+  de a secretaria entrar: vira a senha provisória dela, trocada no primeiro acesso. Não
+  a guarde em lugar nenhum depois.
+
+### 3. Vercel
+
+1. Importe o repositório como projeto Next.js, sem mudar os comandos: o `npm run build`
+   já roda o `prisma generate` antes do `next build`.
+2. Use Node.js 20.19 ou mais novo, com as funções na mesma região do banco.
+3. Cadastre as variáveis de produção:
+
+| Variável | Valor |
+|---|---|
+| `DATABASE_URL` | A conexão pelo pooler |
+| `AUTH_SECRET` | `openssl rand -base64 32`, só deste ambiente. Trocá-la desconecta todo mundo |
+| `CHAVES_CARIMBO` | `1:` seguido de `openssl rand -base64 32` (veja o passo 4) |
+| `AUTH_MICROSOFT_ENTRA_ID_ID`, `_SECRET` e `_ISSUER` | Quando a TI fizer o App registration (veja o passo 5) |
+
+A `DIRECT_URL` e as variáveis do seed não vão para a Vercel: só servem nos comandos do
+passo 2.
+
+Fora da Vercel: `npm ci`, `npm run build` e `npm start`, a partir da raiz do repositório
+(o PDF lê as fontes de `lib/pdf/`), com as mesmas variáveis e mais
+`AUTH_TRUST_HOST=true`. Na Vercel o Auth.js confia no endereço sozinho; em outro lugar,
+sem ela, recusa o login.
+
+### 4. Chave do carimbo
+
+A `CHAVES_CARIMBO` assina o código de autenticidade de todo PDF de relatório aprovado.
+Guarde uma cópia dela fora da Vercel. **Nunca remova nem altere uma versão em uso**: os
+PDFs já impressos com ela passariam a dar como inválidos, e eles valem por cinco anos.
+Para trocar de chave, acrescente uma versão (`1:<atual>,2:<nova>`): a de maior número
+assina os PDFs novos, e todas continuam conferindo os antigos.
+
+### 5. Microsoft Entra ID
+
+Até a TI da Barão fazer o App registration, o acesso é só por e-mail e senha, que
+continua valendo depois: os dois logins convivem. Quando ele vier:
+
+- o tenant é o dos funcionários (domínio `baraodemaua.br`), não o dos alunos
+  (`baraodemaua.edu.br`). O `AUTH_MICROSOFT_ENTRA_ID_ISSUER` é
+  `https://login.microsoftonline.com/<id do tenant>/v2.0`; `common` e `organizations`
+  são recusados;
+- a URI de redirecionamento a cadastrar no App registration é
+  `https://<domínio do sistema>/api/auth/callback/microsoft-entra-id`;
+- preencha as três variáveis juntas e publique de novo. Quem já tem cadastro entra pela
+  Microsoft com o mesmo e-mail; quem não tem continua barrado.
+
+Antes de ligar, decida se quem entra pela Microsoft pode continuar tendo senha. Hoje
+pode: a secretaria consegue definir senha provisória para qualquer conta (veja
+"Proteções do login por senha" no `CLAUDE.md`).
