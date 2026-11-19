@@ -80,7 +80,7 @@ está instalado. Em dúvida sobre a API de uma biblioteca, leia o que está em
    Diverge da §4.3 do documento de requisitos, que proibia base de senhas própria.
 
    Continua proibido sistema de auth de provedor (Auth0, Clerk, Supabase Auth…): o login
-   por senha é `Credentials` do próprio Auth.js, como o login falso de desenvolvimento.
+   por senha é `Credentials` do próprio Auth.js.
    Continua proibido autocadastro: só a secretaria define a senha, sempre **provisória**
    (`/admin/usuarios`), e a pessoa troca no primeiro acesso (`/trocar-senha`); depois,
    altera pelo menu da conta (`/senha`), informando a atual — esqueceu, pede outra
@@ -161,19 +161,24 @@ E-mail é gravado e comparado em minúsculas — o `@unique` do banco diferencia
 > duas vezes por ano a sessão está sempre velha. Vínculo novo cadastrado pela secretaria
 > não apareceria para o docente já logado.
 
-### Login falso para desenvolvimento
+### Sem login de desenvolvimento
 
-Provider `Credentials` habilitado **só quando `NODE_ENV === "development"`**, com quatro
-usuários fixos vindos do seed:
+**Não existe login falso, nem em desenvolvimento** (removido em 2026-11-19, para a
+entrega ao cliente). Não recrie provider, botão ou action que entre sem senha nem
+Microsoft. Os providers são os mesmos em todo ambiente: o de senha sempre, e o Entra ID
+só se `AUTH_MICROSOFT_ENTRA_ID_ID` estiver definida — sem ela o botão dele some do
+`/login`.
+
+Fora de produção o seed cria um cenário de teste manual, sem senha nenhuma:
 
 - um docente vinculado a dois cursos
 - um coordenador de um curso
 - um coordenador que também dá aula no próprio curso (para testar a autoaprovação)
-- uma pessoa da secretaria acadêmica
+- a secretaria `admin@srha.dev`
 
-Ele se soma aos de produção, não os substitui: em desenvolvimento sobem o falso, o de
-senha e — se `AUTH_MICROSOFT_ENTRA_ID_ID` estiver definida — o Entra ID. Sem essa
-variável o Entra ID não sobe em ambiente nenhum, e o botão dele some do `/login`.
+Para entrar, rode o seed com `SECRETARIA_INICIAL_SENHA`, entre como `admin@srha.dev` e
+defina em `/admin/usuarios` a senha provisória de quem for usar — o mesmo caminho de
+produção.
 
 ### Autorização
 
@@ -475,8 +480,9 @@ Iguais em desenvolvimento, diferentes em produção. Ver regra 2.
 No host o container fica na **5433**, não na 5432 padrão: assim não disputa a porta com
 outro Postgres rodando na máquina. Dentro do container continua 5432.
 
-O seed cria a secretaria inicial. Fora de produção é `admin@srha.dev` (a conta do login
-falso). Em produção — seed rodado com `NODE_ENV=production` — vem de
+O seed cria a secretaria inicial. Fora de produção é `admin@srha.dev`, e a
+`SECRETARIA_INICIAL_SENHA` é obrigatória para alguém entrar (§Sem login de
+desenvolvimento). Em produção — seed rodado com `NODE_ENV=production` — vem de
 `SECRETARIA_INICIAL_EMAIL` (e, opcional, `SECRETARIA_INICIAL_NOME`), porque o login é
 pelo Entra ID e precisa ser uma conta institucional real; sem a variável, o seed falha.
 Enquanto o Entra ID não estiver configurado, defina também `SECRETARIA_INICIAL_SENHA`:
@@ -586,7 +592,7 @@ Brief completo em `docs/srha-layout/uploads/SRHA-brief-design.md`. O que não po
 
 1. Projeto, Prisma, migração inicial, seed
 2. Cadastros da secretaria — comece por **importação CSV**, mais rápida que CRUD completo
-3. Auth.js com o provider falso de desenvolvimento
+3. Auth.js (o provider falso de desenvolvimento desta etapa foi removido em 2026-11-19)
 4. Formulário do relatório: itens, total, rascunho
 5. Submissão e roteamento
 6. Fila do coordenador: aprovar e devolver
