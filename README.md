@@ -120,16 +120,16 @@ tem **Baixar modelo (CSV)** com o formato esperado.
    cada pessoa, pelas colunas opcionais **Cursos como docente** (com Ano e Semestre) e
    **Cursos como coordenador**, com os códigos separados por vírgula.
 4. Os vínculos que faltarem: em `/admin/vinculos`, ou na linha de cada pessoa em
-   `/admin/usuarios` (clique no nome).
+   `/admin/usuarios` (botão de vínculos na linha da pessoa).
 
 Reimportar a planilha de usuários atualiza o nome de quem já existe, e a Secretaria
 também se a coluna vier na planilha. Nenhuma planilha remove vínculo: só acrescenta.
 
-**A cada semestre**, basta cadastrar o período novo em `/admin/periodos`: ele já nasce
-com os docentes vinculados no período anterior (só docentes e cursos ativos). Depois,
-tire quem saiu e vincule quem entrou. Coordenação não depende de período e continua
-como está. Se o semestre anterior ganhar vínculos depois de o novo existir, use
-**Trazer do período anterior** em `/admin/vinculos`.
+**A cada semestre**, cadastre o período novo em `/admin/periodos`. Ao salvar, abre a
+renovação: os docentes do período anterior, por curso, todos marcados (só docentes e
+cursos ativos). Desmarque quem saiu e confirme; depois, vincule quem entrou. Coordenação
+não depende de período e continua como está. Para renovar de novo um período já criado,
+use **Renovar do período anterior** em `/admin/vinculos`.
 
 Nenhum relatório é criado: o relatório nasce quando o docente o começa.
 

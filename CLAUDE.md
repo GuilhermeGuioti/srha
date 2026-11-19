@@ -241,15 +241,17 @@ Schema completo em `docs/SRHA-especificacao-desenvolvimento.md` §4. Copie de l�
   `tipoAtividadeId` — não copie o nome para o item.
 - **Vínculo docente-curso com relatório não pode ser removido.** Arquivo e painel partem
   dos vínculos — sem ele, o relatório (mesmo aprovado) sumiria da consulta.
-- **Vínculo docente-curso é por período, com continuidade** (decisão de 2026-11-19): o
-  período novo nasce com os vínculos de docente do anterior — o de ano e semestre logo
-  antes, não o último cadastrado —, só de docente e curso ativos
-  (`copiarVinculosDoPeriodoAnterior` em `lib/services/vinculos.ts`, chamada por
-  `criarPeriodo`). Só acrescenta: quem saiu a secretaria tira à mão. Em `/admin/vinculos`,
-  "Trazer do período anterior" repete a cópia para um período já criado. Copia
-  vínculo, nunca relatório — "não iniciados" continua saindo da diferença. O vínculo
-  contínuo, sem período, foi descartado: mudava painel, arquivo, home e envio, e
-  obrigava a encerrar o vínculo de quem sai.
+- **Vínculo docente-curso é por período, com renovação** (decisões de 2026-11-19): o
+  período novo nasce sem docente, e a renovação traz os do anterior — o de ano e
+  semestre logo antes, não o último cadastrado. Ela mostra por curso quem dá para
+  renovar (docente e curso ativos, ainda fora do período), todos marcados; a secretaria
+  desmarca quem saiu e confirma (`previaRenovacao` e `renovarVinculos` em
+  `lib/services/vinculos.ts`; `components/ModalRenovacao.tsx`). Abre sozinha ao criar o
+  período em `/admin/periodos`, se houver o que trazer, e por "Renovar do período
+  anterior" em `/admin/vinculos`. Só acrescenta e copia vínculo, nunca relatório —
+  "não iniciados" continua saindo da diferença. Descartados: o vínculo contínuo, sem
+  período (mudava painel, arquivo, home e envio, e obrigava a encerrar o vínculo de quem
+  sai), e a cópia automática sem conferência.
 - **Sempre há ao menos uma secretaria ativa.** Inativar ou tirar o perfil da última é
   recusado — sem ela, ninguém mais cadastra nem reativa.
 - **Horas em múltiplos de 0,5**, no máximo 999,5 por item (zod da action, igual ao
@@ -419,8 +421,9 @@ planilha não muda nada, e **nenhuma planilha remove vínculo** — só acrescen
   o avaliador).
 - **Vínculos:** curso pelo código; docente e curso precisam estar ativos.
 
-Vínculo também se cria na linha de cada pessoa em `/admin/usuarios`, com o mesmo
-formulário de `/admin/vinculos` (`components/ModalVinculo.tsx`).
+Vínculo também se cria em `/admin/usuarios`, pelo botão de vínculos na linha da pessoa:
+um modal com a coordenação, a docência por período e o acréscimo, com os mesmos campos
+de `/admin/vinculos` (`components/CamposVinculo.tsx`).
 
 ---
 
