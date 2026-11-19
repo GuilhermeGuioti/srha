@@ -16,20 +16,34 @@ import { paraResultadoErro, type Resultado } from "../../../../../lib/tipos";
 
 const SchemaId = z.object({ id: z.number().int().positive() });
 
-const SchemaVinculoDocente = z.object({
-  docenteId: z.number().int().positive(),
-  cursoId: z.number().int().positive(),
-  periodoLetivoId: z.number().int().positive(),
-});
+// Vínculo aparece em três telas: a de vínculos, a linha de cada pessoa em
+// usuários (que também vincula) e a coordenação e o total de docentes em cursos.
+function revalidarTelasDeVinculo(): void {
+  revalidatePath("/admin/vinculos");
+  revalidatePath("/admin/usuarios");
+  revalidatePath("/admin/cursos");
+}
 
-export type DadosVinculoDocente = z.infer<typeof SchemaVinculoDocente>;
+const Id = z.number().int().positive();
 
-export async function acaoVincularDocente(dados: DadosVinculoDocente): Promise<Resultado<void>> {
+const SchemaNovoVinculo = z.discriminatedUnion("tipo", [
+  z.object({ tipo: z.literal("docente"), pessoaId: Id, cursoId: Id, periodoLetivoId: Id }),
+  z.object({ tipo: z.literal("coordenador"), pessoaId: Id, cursoId: Id }),
+]);
+
+export type DadosNovoVinculo = z.infer<typeof SchemaNovoVinculo>;
+
+// Das duas telas que vinculam: /admin/vinculos e a linha de cada pessoa em /admin/usuarios.
+export async function acaoVincular(dados: DadosNovoVinculo): Promise<Resultado<void>> {
   try {
     await exigirPerfil(Perfil.SECRETARIA); // 1. guard
-    const validado = SchemaVinculoDocente.parse(dados); // 2. zod
-    await vincularDocente(validado.docenteId, validado.cursoId, validado.periodoLetivoId); // 3. serviço
-    revalidatePath("/admin/vinculos"); // 4. revalidação
+    const validado = SchemaNovoVinculo.parse(dados); // 2. zod
+    if (validado.tipo === "docente") {
+      await vincularDocente(validado.pessoaId, validado.cursoId, validado.periodoLetivoId); // 3. serviço
+    } else {
+      await vincularCoordenador(validado.pessoaId, validado.cursoId);
+    }
+    revalidarTelasDeVinculo(); // 4. revalidação
     return { ok: true, dados: undefined };
   } catch (erro) {
     return paraResultadoErro(erro);
@@ -41,26 +55,7 @@ export async function acaoDesvincularDocente(id: number): Promise<Resultado<void
     await exigirPerfil(Perfil.SECRETARIA);
     const validado = SchemaId.parse({ id });
     await desvincularDocente(validado.id);
-    revalidatePath("/admin/vinculos");
-    return { ok: true, dados: undefined };
-  } catch (erro) {
-    return paraResultadoErro(erro);
-  }
-}
-
-const SchemaVinculoCoordenador = z.object({
-  coordenadorId: z.number().int().positive(),
-  cursoId: z.number().int().positive(),
-});
-
-export type DadosVinculoCoordenador = z.infer<typeof SchemaVinculoCoordenador>;
-
-export async function acaoVincularCoordenador(dados: DadosVinculoCoordenador): Promise<Resultado<void>> {
-  try {
-    await exigirPerfil(Perfil.SECRETARIA);
-    const validado = SchemaVinculoCoordenador.parse(dados);
-    await vincularCoordenador(validado.coordenadorId, validado.cursoId);
-    revalidatePath("/admin/vinculos");
+    revalidarTelasDeVinculo();
     return { ok: true, dados: undefined };
   } catch (erro) {
     return paraResultadoErro(erro);
@@ -72,7 +67,7 @@ export async function acaoDesvincularCoordenador(id: number): Promise<Resultado<
     await exigirPerfil(Perfil.SECRETARIA);
     const validado = SchemaId.parse({ id });
     await desvincularCoordenador(validado.id);
-    revalidatePath("/admin/vinculos");
+    revalidarTelasDeVinculo();
     return { ok: true, dados: undefined };
   } catch (erro) {
     return paraResultadoErro(erro);
@@ -84,7 +79,7 @@ export async function acaoImportarVinculosDocente(formulario: FormData): Promise
     await exigirPerfil(Perfil.SECRETARIA);
     const arquivo = SchemaArquivoPlanilha.parse(formulario.get("arquivo"));
     const resultado = await importarVinculosDocente(new Uint8Array(await arquivo.arrayBuffer()));
-    revalidatePath("/admin/vinculos");
+    revalidarTelasDeVinculo();
     return { ok: true, dados: resultado };
   } catch (erro) {
     return paraResultadoErro(erro);
@@ -96,7 +91,7 @@ export async function acaoImportarVinculosCoordenador(formulario: FormData): Pro
     await exigirPerfil(Perfil.SECRETARIA);
     const arquivo = SchemaArquivoPlanilha.parse(formulario.get("arquivo"));
     const resultado = await importarVinculosCoordenador(new Uint8Array(await arquivo.arrayBuffer()));
-    revalidatePath("/admin/vinculos");
+    revalidarTelasDeVinculo();
     return { ok: true, dados: resultado };
   } catch (erro) {
     return paraResultadoErro(erro);

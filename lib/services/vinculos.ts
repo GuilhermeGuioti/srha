@@ -21,7 +21,26 @@ export async function listarVinculosCoordenador() {
   });
 }
 
+// Pessoa ou curso inativo não ganha vínculo novo, venha de que tela vier —
+// a de usuários lista também os inativos. O que já existe continua.
+async function exigirAtivos(usuarioId: number, cursoId: number): Promise<void> {
+  const [usuario, curso] = await Promise.all([
+    prisma.usuario.findUnique({ where: { id: usuarioId } }),
+    prisma.curso.findUnique({ where: { id: cursoId } }),
+  ]);
+  if (!usuario || !curso) {
+    throw new Error("Usuário ou curso não encontrado.");
+  }
+  if (!usuario.ativo) {
+    throw new Error(`${usuario.nome} está inativo — reative o cadastro antes de vincular a um curso.`);
+  }
+  if (!curso.ativo) {
+    throw new Error(`O curso ${curso.codigo} está inativo — reative-o antes de vincular alguém.`);
+  }
+}
+
 export async function vincularDocente(docenteId: number, cursoId: number, periodoLetivoId: number): Promise<void> {
+  await exigirAtivos(docenteId, cursoId);
   const existente = await prisma.vinculoDocenteCurso.findUnique({
     where: { docenteId_cursoId_periodoLetivoId: { docenteId, cursoId, periodoLetivoId } },
   });
@@ -64,6 +83,7 @@ export async function desvincularDocente(vinculoId: number): Promise<void> {
 }
 
 export async function vincularCoordenador(coordenadorId: number, cursoId: number): Promise<void> {
+  await exigirAtivos(coordenadorId, cursoId);
   const existente = await prisma.vinculoCoordenadorCurso.findUnique({
     where: { coordenadorId_cursoId: { coordenadorId, cursoId } },
   });

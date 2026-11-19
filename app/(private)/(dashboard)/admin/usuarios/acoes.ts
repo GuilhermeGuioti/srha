@@ -72,7 +72,10 @@ export async function acaoImportarUsuarios(formulario: FormData): Promise<Result
     await exigirPerfil(Perfil.SECRETARIA);
     const arquivo = SchemaArquivoPlanilha.parse(formulario.get("arquivo"));
     const resultado = await importarUsuarios(new Uint8Array(await arquivo.arrayBuffer()));
+    // As colunas de cursos criam vínculos, que aparecem nestas telas também.
     revalidatePath("/admin/usuarios");
+    revalidatePath("/admin/vinculos");
+    revalidatePath("/admin/cursos");
     return { ok: true, dados: resultado };
   } catch (erro) {
     return paraResultadoErro(erro);

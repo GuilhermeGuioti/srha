@@ -28,9 +28,9 @@ async function obterAmbiente() {
   ]);
 
   const [cursoEngSoftware, cursoCienciaComp, cursoSistemasInfo] = await Promise.all([
-    prisma.curso.create({ data: { nome: "Engenharia de Software" } }),
-    prisma.curso.create({ data: { nome: "Ciência da Computação" } }),
-    prisma.curso.create({ data: { nome: "Sistemas de Informação" } }),
+    prisma.curso.create({ data: { codigo: "ES", nome: "Engenharia de Software" } }),
+    prisma.curso.create({ data: { codigo: "CC", nome: "Ciência da Computação" } }),
+    prisma.curso.create({ data: { codigo: "SI", nome: "Sistemas de Informação" } }),
   ]);
 
   // Janela aberta em torno de agora: com datas fixas, a suíte inteira passaria

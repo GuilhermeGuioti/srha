@@ -28,8 +28,8 @@ async function obterAmbiente() {
   });
 
   const [computacao, software] = await Promise.all([
-    prisma.curso.create({ data: { nome: "Ciência da Computação" } }),
-    prisma.curso.create({ data: { nome: "Engenharia de Software" } }),
+    prisma.curso.create({ data: { codigo: "CC", nome: "Ciência da Computação" } }),
+    prisma.curso.create({ data: { codigo: "ES", nome: "Engenharia de Software" } }),
   ]);
   const [periodo, periodoAnterior] = await Promise.all([
     prisma.periodoLetivo.create({

@@ -18,8 +18,8 @@ async function limpar() {
 async function obterAmbiente() {
   const [docente, curso, outroCurso] = await Promise.all([
     prisma.usuario.create({ data: { nome: "Helena", email: "helena@srha.dev" } }),
-    prisma.curso.create({ data: { nome: "Fisioterapia" } }),
-    prisma.curso.create({ data: { nome: "Enfermagem" } }),
+    prisma.curso.create({ data: { codigo: "FIS", nome: "Fisioterapia" } }),
+    prisma.curso.create({ data: { codigo: "ENF", nome: "Enfermagem" } }),
   ]);
   const periodo = await prisma.periodoLetivo.create({
     data: {
@@ -129,4 +129,24 @@ test("desvincular coordenador do único curso remove o perfil COORDENADOR", asyn
 
   expect(await listarVinculosCoordenador()).toHaveLength(0);
   expect(await perfisDe(coordenador.id)).toEqual([]);
+});
+
+test("usuário ou curso inativo não ganha vínculo novo, de docente nem de coordenador", async () => {
+  const { docente, curso, outroCurso, periodo } = await obterAmbiente();
+  await prisma.usuario.update({ where: { id: docente.id }, data: { ativo: false } });
+
+  await expect(vincularDocente(docente.id, curso.id, periodo.id)).rejects.toThrow(
+    "Helena está inativo — reative o cadastro antes de vincular a um curso.",
+  );
+  await expect(vincularCoordenador(docente.id, curso.id)).rejects.toThrow("Helena está inativo");
+
+  await prisma.usuario.update({ where: { id: docente.id }, data: { ativo: true } });
+  await prisma.curso.update({ where: { id: outroCurso.id }, data: { ativo: false } });
+
+  await expect(vincularDocente(docente.id, outroCurso.id, periodo.id)).rejects.toThrow(
+    "O curso ENF está inativo — reative-o antes de vincular alguém.",
+  );
+  await expect(vincularCoordenador(docente.id, outroCurso.id)).rejects.toThrow("O curso ENF está inativo");
+  expect(await prisma.vinculoDocenteCurso.count()).toBe(0);
+  expect(await prisma.vinculoCoordenadorCurso.count()).toBe(0);
 });

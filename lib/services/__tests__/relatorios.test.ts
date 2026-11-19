@@ -20,7 +20,7 @@ async function obterAmbiente() {
     prisma.usuarioPerfil.create({ data: { usuarioId: coordenador.id, perfil: Perfil.COORDENADOR } }),
   ]);
 
-  const curso = await prisma.curso.create({ data: { nome: "Ciência da Computação" } });
+  const curso = await prisma.curso.create({ data: { codigo: "CC", nome: "Ciência da Computação" } });
   const periodo = await prisma.periodoLetivo.create({
     data: {
       ano: 2026,

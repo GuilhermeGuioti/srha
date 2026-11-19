@@ -29,8 +29,8 @@ async function obterAmbiente() {
   await prisma.usuarioPerfil.create({ data: { usuarioId: secretaria.id, perfil: Perfil.SECRETARIA } });
 
   const [curso, outroCurso] = await Promise.all([
-    prisma.curso.create({ data: { nome: "Fisioterapia" } }),
-    prisma.curso.create({ data: { nome: "Nutrição" } }),
+    prisma.curso.create({ data: { codigo: "FIS", nome: "Fisioterapia" } }),
+    prisma.curso.create({ data: { codigo: "NUT", nome: "Nutrição" } }),
   ]);
   const agora = Date.now();
   const periodo = await prisma.periodoLetivo.create({

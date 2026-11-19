@@ -87,8 +87,12 @@ model UsuarioPerfil {
   @@unique([usuarioId, perfil])
 }
 
+// codigo é o identificador que a secretaria informa (ex.: ENF), usado nas
+// planilhas no lugar do nome — sempre em maiúsculas (CHECK na migration
+// codigo_curso), então o @unique não deixa "enf" e "ENF" conviverem.
 model Curso {
   id     Int     @id @default(autoincrement())
+  codigo String  @unique
   nome   String  @unique
   ativo  Boolean @default(true)
 

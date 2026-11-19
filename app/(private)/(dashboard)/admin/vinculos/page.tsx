@@ -24,6 +24,7 @@ export default async function AdminVinculosPage() {
         periodoLetivoId: vinculo.periodoLetivoId,
         periodoRotulo: `${vinculo.periodo.ano}/${vinculo.periodo.semestre}`,
         cursoId: vinculo.cursoId,
+        cursoCodigo: vinculo.curso.codigo,
         cursoNome: vinculo.curso.nome,
         docenteId: vinculo.docenteId,
         docenteNome: vinculo.docente.nome,
@@ -31,11 +32,12 @@ export default async function AdminVinculosPage() {
       vinculosCoordenador={vinculosCoordenador.map((vinculo) => ({
         id: vinculo.id,
         cursoId: vinculo.cursoId,
+        cursoCodigo: vinculo.curso.codigo,
         cursoNome: vinculo.curso.nome,
         coordenadorId: vinculo.coordenadorId,
         coordenadorNome: vinculo.coordenador.nome,
       }))}
-      cursos={cursosAtivos.map((curso) => ({ id: curso.id, nome: curso.nome }))}
+      cursos={cursosAtivos.map((curso) => ({ id: curso.id, codigo: curso.codigo, nome: curso.nome }))}
       usuarios={usuariosAtivos.map((usuario) => ({ id: usuario.id, nome: usuario.nome }))}
     />
   );

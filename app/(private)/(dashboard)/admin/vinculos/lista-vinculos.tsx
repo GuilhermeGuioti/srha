@@ -1,12 +1,11 @@
 "use client";
 
-import { useState, useTransition, type FormEvent } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { LinkTexto } from "../../../../../components/LinkTexto";
-import { Modal } from "../../../../../components/Modal";
 import { BotaoPrimario } from "../../../../../components/BotaoPrimario";
-import { BotaoSecundario } from "../../../../../components/BotaoSecundario";
-import { Campo, classeCampoSelect } from "../../../../../components/Campo";
+import { ModalVinculo, type TipoVinculo } from "../../../../../components/ModalVinculo";
+import { NomeCurso } from "../../../../../components/NomeCurso";
 import { Destaque } from "../../../../../components/Destaque";
 import { SeletorFiltro } from "../../../../../components/SeletorFiltro";
 import { Tabela } from "../../../../../components/Tabela";
@@ -14,26 +13,26 @@ import { CabecalhoAdmin } from "../../../../../components/CabecalhoAdmin";
 import { CampoBusca } from "../../../../../components/CampoBusca";
 import { AcaoTabela } from "../../../../../components/AcaoTabela";
 import { IconeRemover } from "../../../../../components/Icones";
-import { MensagemErro } from "../../../../../components/MensagemErro";
 import { ImportadorPlanilha } from "../../../../../components/ImportadorPlanilha";
 import { MODELOS_IMPORTACAO } from "../../../../../lib/importacao";
 import { useBusca } from "../../../../../lib/hooks/useBusca";
 import {
-  acaoVincularDocente,
+  acaoVincular,
   acaoDesvincularDocente,
-  acaoVincularCoordenador,
   acaoDesvincularCoordenador,
   acaoImportarVinculosDocente,
   acaoImportarVinculosCoordenador,
 } from "./acoes";
 
 type Periodo = { id: number; rotulo: string };
+type Curso = { id: number; codigo: string; nome: string };
 type Opcao = { id: number; nome: string };
 type VinculoDocente = {
   id: number;
   periodoLetivoId: number;
   periodoRotulo: string;
   cursoId: number;
+  cursoCodigo: string;
   cursoNome: string;
   docenteId: number;
   docenteNome: string;
@@ -41,12 +40,11 @@ type VinculoDocente = {
 type VinculoCoordenador = {
   id: number;
   cursoId: number;
+  cursoCodigo: string;
   cursoNome: string;
   coordenadorId: number;
   coordenadorNome: string;
 };
-
-type Modo = "docente" | "coordenador";
 
 export function ListaVinculos({
   periodos,
@@ -58,16 +56,14 @@ export function ListaVinculos({
   periodos: Periodo[];
   vinculosDocente: VinculoDocente[];
   vinculosCoordenador: VinculoCoordenador[];
-  cursos: Opcao[];
+  cursos: Curso[];
   usuarios: Opcao[];
 }) {
   const router = useRouter();
-  const [modo, setModo] = useState<Modo | null>(null);
-  const [cursoId, setCursoId] = useState<number | "">("");
-  const [pessoaId, setPessoaId] = useState<number | "">("");
-  const [periodoId, setPeriodoId] = useState<number | "">("");
-  const [erro, setErro] = useState<string | null>(null);
-  const [pendente, startTransition] = useTransition();
+  const [modo, setModo] = useState<TipoVinculo | null>(null);
+  // Nova a cada abertura: o formulário do vínculo abre zerado (ModalVinculo).
+  const [abertura, setAbertura] = useState(0);
+  const [, startTransition] = useTransition();
   const buscaDocentes = useBusca();
   const buscaCoordenadores = useBusca();
   const [periodoFiltroId, setPeriodoFiltroId] = useState<number | "todos">("todos");
@@ -76,43 +72,23 @@ export function ListaVinculos({
     (vinculo) =>
       (periodoFiltroId === "todos" || vinculo.periodoLetivoId === periodoFiltroId) &&
       (vinculo.docenteNome.toLowerCase().includes(buscaDocentes.normalizado) ||
-        vinculo.cursoNome.toLowerCase().includes(buscaDocentes.normalizado)),
+        vinculo.cursoNome.toLowerCase().includes(buscaDocentes.normalizado) ||
+        vinculo.cursoCodigo.toLowerCase().includes(buscaDocentes.normalizado)),
   );
 
   const coordenadoresFiltrados = vinculosCoordenador.filter(
     (vinculo) =>
       vinculo.coordenadorNome.toLowerCase().includes(buscaCoordenadores.normalizado) ||
-      vinculo.cursoNome.toLowerCase().includes(buscaCoordenadores.normalizado),
+      vinculo.cursoNome.toLowerCase().includes(buscaCoordenadores.normalizado) ||
+      vinculo.cursoCodigo.toLowerCase().includes(buscaCoordenadores.normalizado),
   );
 
-  function abrirNovo(novoModo: Modo) {
+  function abrirNovo(novoModo: TipoVinculo) {
     setModo(novoModo);
-    setCursoId("");
-    setPessoaId("");
-    setPeriodoId(periodos[0]?.id ?? "");
-    setErro(null);
+    setAbertura((atual) => atual + 1);
   }
 
-  function salvar(evento: FormEvent) {
-    evento.preventDefault();
-    setErro(null);
-    if (cursoId === "" || pessoaId === "") return;
-    if (modo === "docente" && periodoId === "") return;
-    startTransition(async () => {
-      const resultado =
-        modo === "docente"
-          ? await acaoVincularDocente({ docenteId: Number(pessoaId), cursoId: Number(cursoId), periodoLetivoId: Number(periodoId) })
-          : await acaoVincularCoordenador({ coordenadorId: Number(pessoaId), cursoId: Number(cursoId) });
-      if (!resultado.ok) {
-        setErro(resultado.erro);
-        return;
-      }
-      setModo(null);
-      router.refresh();
-    });
-  }
-
-  function remover(tipoVinculo: Modo, id: number, rotulo: string) {
+  function remover(tipoVinculo: TipoVinculo, id: number, rotulo: string) {
     if (!window.confirm(`Remover o vínculo de ${rotulo}?`)) return;
     startTransition(async () => {
       const resultado = await (tipoVinculo === "docente" ? acaoDesvincularDocente(id) : acaoDesvincularCoordenador(id));
@@ -157,7 +133,7 @@ export function ListaVinculos({
                     modelo={MODELOS_IMPORTACAO.vinculosDocente}
                     eyebrow="ADMINISTRAÇÃO · VÍNCULOS"
                     titulo="Importar vínculos de docentes"
-                    descricao="Um vínculo por linha. Docente, curso e período precisam estar cadastrados e ativos; vínculo que já existe é ignorado."
+                    descricao="Um vínculo por linha, com o curso pelo código. Docente, curso e período precisam estar cadastrados e ativos; vínculo que já existe é ignorado."
                     complementoAcessivel="de vínculos de docentes"
                     acao={acaoImportarVinculosDocente}
                   />
@@ -171,7 +147,7 @@ export function ListaVinculos({
             <div className="flex flex-wrap gap-2">
               <CampoBusca
                 id="busca-docentes"
-                rotuloAcessivel="Buscar por nome do docente ou do curso"
+                rotuloAcessivel="Buscar por nome do docente, nome ou código do curso"
                 placeholder="Buscar por docente ou curso…"
                 valor={buscaDocentes.valor}
                 onChange={buscaDocentes.definir}
@@ -198,7 +174,11 @@ export function ListaVinculos({
                   : "Nenhum docente vinculado."
               }
               colunas={[
-                { cabecalho: "Curso", largura: "38%", render: (vinculo) => vinculo.cursoNome },
+                {
+                  cabecalho: "Curso",
+                  largura: "38%",
+                  render: (vinculo) => <NomeCurso codigo={vinculo.cursoCodigo} nome={vinculo.cursoNome} />,
+                },
                 { cabecalho: "Docente", largura: "38%", render: (vinculo) => vinculo.docenteNome },
                 {
                   cabecalho: "Período",
@@ -235,7 +215,7 @@ export function ListaVinculos({
                   modelo={MODELOS_IMPORTACAO.vinculosCoordenador}
                   eyebrow="ADMINISTRAÇÃO · VÍNCULOS"
                   titulo="Importar vínculos de coordenadores"
-                  descricao="O primeiro coordenador ativo cadastrado para o curso recebe os relatórios para avaliação — as linhas são gravadas na ordem da planilha. Vínculo que já existe é ignorado."
+                  descricao="Um vínculo por linha, com o curso pelo código. O primeiro coordenador ativo cadastrado para o curso recebe os relatórios para avaliação — as linhas são gravadas na ordem da planilha. Vínculo que já existe é ignorado."
                   complementoAcessivel="de vínculos de coordenadores"
                   acao={acaoImportarVinculosCoordenador}
                 />
@@ -249,7 +229,7 @@ export function ListaVinculos({
           <div className="flex gap-2">
             <CampoBusca
               id="busca-coordenadores"
-              rotuloAcessivel="Buscar por nome do coordenador ou do curso"
+              rotuloAcessivel="Buscar por nome do coordenador, nome ou código do curso"
               placeholder="Buscar por coordenador ou curso…"
               valor={buscaCoordenadores.valor}
               onChange={buscaCoordenadores.definir}
@@ -264,7 +244,11 @@ export function ListaVinculos({
               buscaCoordenadores.normalizado ? "Nenhum vínculo encontrado." : "Nenhum coordenador vinculado."
             }
             colunas={[
-              { cabecalho: "Curso", largura: "38%", render: (vinculo) => vinculo.cursoNome },
+              {
+                cabecalho: "Curso",
+                largura: "38%",
+                render: (vinculo) => <NomeCurso codigo={vinculo.cursoCodigo} nome={vinculo.cursoNome} />,
+              },
               { cabecalho: "Coordenador", largura: "38%", render: (vinculo) => vinculo.coordenadorNome },
               {
                 cabecalho: "",
@@ -287,79 +271,21 @@ export function ListaVinculos({
         </section>
       </div>
 
-      <Modal
+      <ModalVinculo
+        key={abertura}
         aberto={modo !== null}
+        onFechar={() => setModo(null)}
         eyebrow="ADMINISTRAÇÃO · VÍNCULOS"
         titulo={modo === "docente" ? "Vincular docente a um curso" : "Vincular coordenador a um curso"}
-        descricao={
-          modo === "coordenador"
-            ? "O primeiro coordenador ativo cadastrado para o curso é quem recebe os relatórios para avaliação."
-            : undefined
-        }
-        onFechar={() => setModo(null)}
-        rodape={
-          <>
-            <BotaoSecundario onClick={() => setModo(null)}>Cancelar</BotaoSecundario>
-            <BotaoPrimario type="submit" form="form-vinculo" disabled={pendente}>
-              {pendente ? "Salvando…" : "Vincular"}
-            </BotaoPrimario>
-          </>
-        }
-      >
-        <form id="form-vinculo" onSubmit={salvar} className="flex flex-col gap-4">
-          {erro && <MensagemErro>{erro}</MensagemErro>}
-          <Campo rotulo="Curso" htmlFor="curso-vinculo">
-            <select
-              id="curso-vinculo"
-              value={cursoId}
-              onChange={(evento) => setCursoId(evento.target.value === "" ? "" : Number(evento.target.value))}
-              required
-              className={classeCampoSelect}
-            >
-              <option value="">— selecione —</option>
-              {cursos.map((curso) => (
-                <option key={curso.id} value={curso.id}>
-                  {curso.nome}
-                </option>
-              ))}
-            </select>
-          </Campo>
-          <Campo rotulo={modo === "docente" ? "Docente" : "Coordenador"} htmlFor="pessoa-vinculo">
-            <select
-              id="pessoa-vinculo"
-              value={pessoaId}
-              onChange={(evento) => setPessoaId(evento.target.value === "" ? "" : Number(evento.target.value))}
-              required
-              className={classeCampoSelect}
-            >
-              <option value="">— selecione —</option>
-              {usuarios.map((usuario) => (
-                <option key={usuario.id} value={usuario.id}>
-                  {usuario.nome}
-                </option>
-              ))}
-            </select>
-          </Campo>
-          {modo === "docente" && (
-            <Campo rotulo="Período" htmlFor="periodo-vinculo">
-              <select
-                id="periodo-vinculo"
-                value={periodoId}
-                onChange={(evento) => setPeriodoId(evento.target.value === "" ? "" : Number(evento.target.value))}
-                required
-                className={classeCampoSelect}
-              >
-                <option value="">— selecione —</option>
-                {periodos.map((periodo) => (
-                  <option key={periodo.id} value={periodo.id}>
-                    {periodo.rotulo}
-                  </option>
-                ))}
-              </select>
-            </Campo>
-          )}
-        </form>
-      </Modal>
+        cursos={cursos}
+        periodos={periodos}
+        tipo={modo ?? "docente"}
+        pessoa={{
+          rotulo: modo === "docente" ? "Docente" : "Coordenador",
+          opcoes: usuarios.map((usuario) => ({ id: usuario.id, rotulo: usuario.nome })),
+        }}
+        vincular={acaoVincular}
+      />
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { prisma } from "../db";
-import { Perfil } from "../../generated/prisma/client";
+import { Perfil, Prisma } from "../../generated/prisma/client";
 import { sincronizarPerfil } from "./perfis";
 import { gerarHashSenha, verificarSenha } from "../auth/senha";
 import { buscarUsuarioPelaSenha, LIMITE_TENTATIVAS_SENHA, MINUTOS_BLOQUEIO_SENHA } from "../auth/login";
@@ -17,8 +17,11 @@ export async function listarUsuarios() {
     include: {
       perfis: true,
       senhasDefinidas: { orderBy: { ocorridoEm: "desc" }, include: { definidaPor: { select: { nome: true } } } },
-      vinculosDocente: { include: { curso: true } },
-      vinculosCoordenador: { include: { curso: true } },
+      vinculosDocente: {
+        include: { curso: true, periodo: true },
+        orderBy: [{ periodo: { ano: "desc" } }, { periodo: { semestre: "desc" } }, { curso: { nome: "asc" } }],
+      },
+      vinculosCoordenador: { include: { curso: true }, orderBy: { curso: { nome: "asc" } } },
     },
   });
 }
@@ -41,15 +44,22 @@ export async function criarUsuario(dados: DadosUsuario): Promise<number> {
   });
 }
 
-const SECRETARIA_ATIVA = { ativo: true, perfis: { some: { perfil: Perfil.SECRETARIA } } };
+export const SECRETARIA_ATIVA = { ativo: true, perfis: { some: { perfil: Perfil.SECRETARIA } } };
+
+export const MENSAGEM_ULTIMA_SECRETARIA =
+  "O sistema precisa de ao menos uma pessoa ativa na secretaria acadêmica — cadastre outra antes de inativar esta ou tirar o perfil dela.";
+
+// Duas mudanças de secretaria ao mesmo tempo: cada transação ainda via a outra
+// ativa e as duas passavam. Travando os perfis de secretaria, a segunda espera
+// a primeira e já conta o que sobrou.
+export async function travarPerfisDeSecretaria(tx: Prisma.TransactionClient): Promise<void> {
+  await tx.$queryRaw`SELECT 1 FROM "UsuarioPerfil" WHERE "perfil" = 'SECRETARIA' FOR UPDATE`;
+}
 
 export async function atualizarUsuario(id: number, dados: DadosUsuario): Promise<void> {
   await exigirEmailDisponivel(dados.email, id);
   await prisma.$transaction(async (tx) => {
-    // Duas secretarias se inativando ao mesmo tempo: cada transação ainda via
-    // a outra ativa e as duas passavam. Travando os perfis de secretaria, a
-    // segunda espera a primeira e já conta o que sobrou.
-    await tx.$queryRaw`SELECT 1 FROM "UsuarioPerfil" WHERE "perfil" = 'SECRETARIA' FOR UPDATE`;
+    await travarPerfisDeSecretaria(tx);
     const eraSecretariaAtiva = await tx.usuario.count({ where: { id, ...SECRETARIA_ATIVA } });
     await tx.usuario.update({
       where: { id },
@@ -61,9 +71,7 @@ export async function atualizarUsuario(id: number, dados: DadosUsuario): Promise
     // secretaria ativa, confere quantas restaram e desfaz tudo se zerou.
     const deixouDeSer = eraSecretariaAtiva > 0 && !(dados.ativo && dados.secretaria);
     if (deixouDeSer && (await tx.usuario.count({ where: SECRETARIA_ATIVA })) === 0) {
-      throw new Error(
-        "O sistema precisa de ao menos uma pessoa ativa na secretaria acadêmica — cadastre outra antes de inativar esta ou tirar o perfil dela.",
-      );
+      throw new Error(MENSAGEM_ULTIMA_SECRETARIA);
     }
   });
 }

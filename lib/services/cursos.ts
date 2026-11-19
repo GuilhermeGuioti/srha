@@ -1,6 +1,7 @@
 import { prisma } from "../db";
 
 export type DadosCurso = {
+  codigo: string;
   nome: string;
   ativo: boolean;
 };
@@ -15,20 +16,28 @@ export async function listarCursos() {
   });
 }
 
-async function exigirNomeDisponivel(nome: string, ignorarId?: number): Promise<void> {
-  const existente = await prisma.curso.findUnique({ where: { nome } });
-  if (existente && existente.id !== ignorarId) {
+async function exigirDisponivel(dados: DadosCurso, ignorarId?: number): Promise<void> {
+  const [mesmoCodigo, mesmoNome] = await Promise.all([
+    prisma.curso.findUnique({ where: { codigo: dados.codigo } }),
+    prisma.curso.findUnique({ where: { nome: dados.nome } }),
+  ]);
+  if (mesmoCodigo && mesmoCodigo.id !== ignorarId) {
+    throw new Error(`Já existe um curso com o código ${dados.codigo} (${mesmoCodigo.nome}).`);
+  }
+  if (mesmoNome && mesmoNome.id !== ignorarId) {
     throw new Error("Já existe um curso com este nome.");
   }
 }
 
 export async function criarCurso(dados: DadosCurso): Promise<number> {
-  await exigirNomeDisponivel(dados.nome);
+  await exigirDisponivel(dados);
   const curso = await prisma.curso.create({ data: dados });
   return curso.id;
 }
 
+// O código pode mudar: vínculos e relatórios apontam para o id, e o código só
+// serve para achar o curso nas planilhas.
 export async function atualizarCurso(id: number, dados: DadosCurso): Promise<void> {
-  await exigirNomeDisponivel(dados.nome, id);
+  await exigirDisponivel(dados, id);
   await prisma.curso.update({ where: { id }, data: dados });
 }

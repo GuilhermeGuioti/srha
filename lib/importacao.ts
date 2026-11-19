@@ -27,17 +27,24 @@ export const MODELOS_IMPORTACAO = {
       { chave: "nome", rotulo: "Nome", obrigatoria: true, exemplo: "Maria da Silva" },
       { chave: "email", rotulo: "E-mail", obrigatoria: true, exemplo: "maria.silva@instituicao.edu.br" },
       { chave: "secretaria", rotulo: "Secretaria", obrigatoria: false, exemplo: "Sim ou Não (vazio é Não)" },
+      { chave: "cursosDocente", rotulo: "Cursos como docente", obrigatoria: false, exemplo: "Códigos: ENF, PSI" },
+      { chave: "ano", rotulo: "Ano", obrigatoria: false, exemplo: "2026 (com curso como docente)" },
+      { chave: "semestre", rotulo: "Semestre", obrigatoria: false, exemplo: "1 ou 2 (com curso como docente)" },
+      { chave: "cursosCoordenador", rotulo: "Cursos como coordenador", obrigatoria: false, exemplo: "Códigos: ENF" },
     ],
   },
   cursos: {
     nomeArquivo: "modelo-cursos.csv",
-    colunas: [{ chave: "nome", rotulo: "Nome", obrigatoria: true, exemplo: "Engenharia Civil" }],
+    colunas: [
+      { chave: "codigo", rotulo: "Código", obrigatoria: true, exemplo: "ECV" },
+      { chave: "nome", rotulo: "Nome", obrigatoria: true, exemplo: "Engenharia Civil" },
+    ],
   },
   vinculosDocente: {
     nomeArquivo: "modelo-vinculos-docente.csv",
     colunas: [
       { chave: "email", rotulo: "E-mail do docente", obrigatoria: true, exemplo: "maria.silva@instituicao.edu.br" },
-      { chave: "curso", rotulo: "Curso", obrigatoria: true, exemplo: "Engenharia Civil" },
+      { chave: "curso", rotulo: "Código do curso", obrigatoria: true, exemplo: "ECV" },
       { chave: "ano", rotulo: "Ano", obrigatoria: true, exemplo: "2026" },
       { chave: "semestre", rotulo: "Semestre", obrigatoria: true, exemplo: "1 ou 2" },
     ],
@@ -46,7 +53,7 @@ export const MODELOS_IMPORTACAO = {
     nomeArquivo: "modelo-vinculos-coordenador.csv",
     colunas: [
       { chave: "email", rotulo: "E-mail do coordenador", obrigatoria: true, exemplo: "joao.souza@instituicao.edu.br" },
-      { chave: "curso", rotulo: "Curso", obrigatoria: true, exemplo: "Engenharia Civil" },
+      { chave: "curso", rotulo: "Código do curso", obrigatoria: true, exemplo: "ECV" },
     ],
   },
 } satisfies Record<string, ModeloImportacao>;
@@ -54,9 +61,10 @@ export const MODELOS_IMPORTACAO = {
 export type ErroLinha = { linha: number; erro: string };
 
 // Tudo ou nada: com qualquer linha errada nada é gravado, e a planilha volta
-// inteira para correção.
+// inteira para correção. `atualizados` e `vinculos` só vêm da planilha de
+// usuários, que atualiza quem já existe e pode vincular a cursos.
 export type ResultadoImportacao =
-  | { gravado: true; importados: number; jaExistiam: number }
+  | { gravado: true; importados: number; jaExistiam: number; atualizados?: number; vinculos?: number }
   | { gravado: false; erros: ErroLinha[] };
 
 // Folga grande: 1 MB de CSV são dezenas de milhares de linhas. É também o
@@ -112,6 +120,11 @@ function detectarSeparador(texto: string): string {
 
 export type LinhaPlanilha = { linha: number; valores: Record<string, string> };
 
+// Coluna opcional que faltou no cabeçalho chega vazia nas linhas, como a que
+// veio em branco; `presentes` diz quais estavam lá, para quem precisar
+// distinguir "não informado" de "informado vazio".
+export type PlanilhaLida = { linhas: LinhaPlanilha[]; erros: ErroLinha[]; presentes: Set<string> };
+
 /**
  * Lê o CSV e devolve as linhas preenchidas com o número da linha no arquivo
  * (cabeçalho é a linha 1), já com os valores sem espaços nas pontas.
@@ -119,10 +132,7 @@ export type LinhaPlanilha = { linha: number; valores: Record<string, string> };
  * é lançado como exceção; linha com campo obrigatório vazio vira erro e fica
  * de fora das linhas devolvidas.
  */
-export function lerPlanilha(
-  texto: string,
-  modelo: ModeloImportacao,
-): { linhas: LinhaPlanilha[]; erros: ErroLinha[] } {
+export function lerPlanilha(texto: string, modelo: ModeloImportacao): PlanilhaLida {
   const semBom = texto.replace(/^﻿/, "");
   const { data } = Papa.parse<string[]>(semBom, { delimiter: detectarSeparador(semBom), skipEmptyLines: false });
 
@@ -166,5 +176,6 @@ export function lerPlanilha(
     }
   }
 
-  return { linhas, erros };
+  const presentes = new Set(posicoes.filter(({ indice }) => indice !== -1).map(({ coluna }) => coluna.chave));
+  return { linhas, erros, presentes };
 }

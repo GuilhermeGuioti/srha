@@ -12,6 +12,7 @@ export default async function AdminCursosPage() {
     <ListaCursos
       cursos={cursos.map((curso) => ({
         id: curso.id,
+        codigo: curso.codigo,
         nome: curso.nome,
         ativo: curso.ativo,
         coordenadores: curso.coordenadores.map((vinculo) => vinculo.coordenador.nome),

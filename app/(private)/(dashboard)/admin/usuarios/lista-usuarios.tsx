@@ -13,7 +13,9 @@ import { CabecalhoAdmin } from "../../../../../components/CabecalhoAdmin";
 import { CampoBusca } from "../../../../../components/CampoBusca";
 import { AbasFiltro } from "../../../../../components/AbasFiltro";
 import { AcaoTabela } from "../../../../../components/AcaoTabela";
-import { IconeCadeado, IconeChevron, IconeEditar } from "../../../../../components/Icones";
+import { IconeCadeado, IconeChevron, IconeEditar, IconeRemover } from "../../../../../components/Icones";
+import { ModalVinculo } from "../../../../../components/ModalVinculo";
+import { NomeCurso } from "../../../../../components/NomeCurso";
 import { SeletorFiltro } from "../../../../../components/SeletorFiltro";
 import { CampoCheckbox } from "../../../../../components/CampoCheckbox";
 import { MensagemErro } from "../../../../../components/MensagemErro";
@@ -22,9 +24,14 @@ import { MODELOS_IMPORTACAO } from "../../../../../lib/importacao";
 import { useBusca } from "../../../../../lib/hooks/useBusca";
 import { TAMANHO_MAXIMO_SENHA, TAMANHO_MINIMO_SENHA } from "../../../../../lib/senha";
 import { acaoCriarUsuario, acaoAtualizarUsuario, acaoDefinirSenhaProvisoria, acaoImportarUsuarios } from "./acoes";
+import { acaoVincular, acaoDesvincularDocente, acaoDesvincularCoordenador } from "../vinculos/acoes";
 import type { Perfil as TipoPerfil } from "../../../../../generated/prisma/client";
 
 type SituacaoSenha = "nenhuma" | "provisoria" | "definida";
+
+type VinculoUsuario =
+  | { id: number; tipo: "docente"; cursoCodigo: string; cursoNome: string; periodoRotulo: string }
+  | { id: number; tipo: "coordenador"; cursoCodigo: string; cursoNome: string };
 
 type UsuarioLinha = {
   id: number;
@@ -33,7 +40,7 @@ type UsuarioLinha = {
   ativo: boolean;
   secretaria: boolean;
   perfis: TipoPerfil[];
-  cursos: string[];
+  vinculos: VinculoUsuario[];
   senha: SituacaoSenha;
   historicoSenha: { id: number; quem: string; quando: string }[];
 };
@@ -69,7 +76,15 @@ function temPerfil(usuario: UsuarioLinha, filtro: FiltroPerfil): boolean {
 
 const COLUNAS = 5;
 
-export function ListaUsuarios({ usuarios }: { usuarios: UsuarioLinha[] }) {
+export function ListaUsuarios({
+  usuarios,
+  cursos,
+  periodos,
+}: {
+  usuarios: UsuarioLinha[];
+  cursos: { id: number; codigo: string; nome: string }[];
+  periodos: { id: number; rotulo: string }[];
+}) {
   const router = useRouter();
   const [modalAberto, setModalAberto] = useState(false);
   const [usuarioEmEdicao, setUsuarioEmEdicao] = useState<UsuarioLinha | null>(null);
@@ -86,6 +101,9 @@ export function ListaUsuarios({ usuarios }: { usuarios: UsuarioLinha[] }) {
   const [usuarioDaSenha, setUsuarioDaSenha] = useState<UsuarioLinha | null>(null);
   const [senhaProvisoria, setSenhaProvisoria] = useState("");
   const [erroSenha, setErroSenha] = useState<string | null>(null);
+  const [usuarioDoVinculo, setUsuarioDoVinculo] = useState<UsuarioLinha | null>(null);
+  // Nova a cada abertura: o formulário do vínculo abre zerado (ModalVinculo).
+  const [aberturaVinculo, setAberturaVinculo] = useState(0);
 
   const usuariosAtivos = usuarios.filter((usuario) => usuario.ativo);
   const usuariosInativos = usuarios.filter((usuario) => !usuario.ativo);
@@ -166,13 +184,34 @@ export function ListaUsuarios({ usuarios }: { usuarios: UsuarioLinha[] }) {
     });
   }
 
+  function abrirVinculo(usuario: UsuarioLinha) {
+    setUsuarioDoVinculo(usuario);
+    setAberturaVinculo((atual) => atual + 1);
+  }
+
+  function removerVinculo(usuario: UsuarioLinha, vinculo: VinculoUsuario) {
+    if (!window.confirm(`Remover o vínculo de ${usuario.nome} em ${vinculo.cursoNome}?`)) return;
+    startTransition(async () => {
+      const resultado = await (vinculo.tipo === "docente"
+        ? acaoDesvincularDocente(vinculo.id)
+        : acaoDesvincularCoordenador(vinculo.id));
+      if (!resultado.ok) {
+        // Fora de modal não há onde pendurar MensagemErro — mesmo canal nativo
+        // do confirm acima, como na tela de vínculos.
+        window.alert(resultado.erro);
+        return;
+      }
+      router.refresh();
+    });
+  }
+
   return (
     <div className="flex flex-col gap-5">
       <CabecalhoAdmin
         titulo="Usuários"
         subtitulo={
           <p className="text-[15px] text-tinta-suave">
-            Pessoas com acesso ao sistema. Clique numa pessoa para ver cursos e senha de acesso.
+            Pessoas com acesso ao sistema. Clique numa pessoa para ver e vincular cursos e ver a senha de acesso.
           </p>
         }
         acao={
@@ -181,7 +220,7 @@ export function ListaUsuarios({ usuarios }: { usuarios: UsuarioLinha[] }) {
               modelo={MODELOS_IMPORTACAO.usuarios}
               eyebrow="ADMINISTRAÇÃO · USUÁRIOS"
               titulo="Importar usuários"
-              descricao="Uma pessoa por linha. E-mail já cadastrado é ignorado, sem alterar o cadastro existente. Docente e coordenação vêm dos vínculos."
+              descricao="Uma pessoa por linha. E-mail já cadastrado tem o nome atualizado, e a Secretaria também se a coluna vier na planilha. As colunas de cursos são opcionais e vinculam pelo código do curso; a planilha só acrescenta vínculos, nunca remove."
               acao={acaoImportarUsuarios}
             />
             <BotaoPrimario onClick={abrirNovo} icone>
@@ -295,14 +334,41 @@ export function ListaUsuarios({ usuarios }: { usuarios: UsuarioLinha[] }) {
                 <div className="flex flex-wrap gap-x-10 gap-y-3 text-[15px]">
                   <div>
                     <div className="text-[13px] font-semibold text-tinta-suave">Cursos</div>
-                    {usuario.cursos.length === 0 ? (
-                      <div className="mt-1.5 text-tinta-suave">—</div>
+                    {usuario.vinculos.length === 0 ? (
+                      <div className="mt-1.5 text-tinta-suave">Nenhum vínculo com curso.</div>
                     ) : (
-                      <ul className="mt-1.5 flex flex-col gap-1">
-                        {usuario.cursos.map((curso) => (
-                          <li key={curso}>{curso}</li>
-                        ))}
+                      <ul className="mt-1 flex flex-col">
+                        {usuario.vinculos.map((vinculo) => {
+                          const perfil = rotuloPerfil[vinculo.tipo === "docente" ? "DOCENTE" : "COORDENADOR"];
+                          return (
+                            <li key={`${vinculo.tipo}-${vinculo.id}`} className="flex flex-wrap items-center gap-x-3">
+                              <NomeCurso codigo={vinculo.cursoCodigo} nome={vinculo.cursoNome} />
+                              <Pill cor={perfil.cor} forma={perfil.forma}>
+                                {perfil.rotulo}
+                              </Pill>
+                              {vinculo.tipo === "docente" && (
+                                <span className="font-mono text-[13px] tabular-nums text-tinta-suave">
+                                  {vinculo.periodoRotulo}
+                                </span>
+                              )}
+                              <AcaoTabela
+                                cor="devolvido"
+                                rotulo={`Remover vínculo de ${usuario.nome} em ${vinculo.cursoNome}`}
+                                onClick={() => removerVinculo(usuario, vinculo)}
+                              >
+                                <IconeRemover className="h-[18px] w-[18px]" />
+                              </AcaoTabela>
+                            </li>
+                          );
+                        })}
                       </ul>
+                    )}
+                    {/* Inativo não ganha vínculo novo (o serviço recusa); os que
+                        já tem continuam aqui. */}
+                    {usuario.ativo && (
+                      <div className="mt-2">
+                        <BotaoSecundario onClick={() => abrirVinculo(usuario)}>Vincular a um curso</BotaoSecundario>
+                      </div>
                     )}
                   </div>
                   <div>
@@ -330,7 +396,7 @@ export function ListaUsuarios({ usuarios }: { usuarios: UsuarioLinha[] }) {
         aberto={modalAberto}
         eyebrow="ADMINISTRAÇÃO · USUÁRIOS"
         titulo={usuarioEmEdicao ? "Editar usuário" : "Novo usuário"}
-        descricao="Docente e coordenação são consequência do vínculo com o curso, cadastrado em outra tela."
+        descricao="Docente e coordenação são consequência do vínculo com o curso: clique na pessoa, na lista, para vincular."
         onFechar={() => setModalAberto(false)}
         rodape={
           <>
@@ -367,6 +433,19 @@ export function ListaUsuarios({ usuarios }: { usuarios: UsuarioLinha[] }) {
           <CampoCheckbox id="usuario-secretaria" rotulo="Secretaria acadêmica" checked={secretaria} onChange={setSecretaria} />
         </form>
       </Modal>
+
+      <ModalVinculo
+        key={aberturaVinculo}
+        aberto={usuarioDoVinculo !== null}
+        onFechar={() => setUsuarioDoVinculo(null)}
+        eyebrow="ADMINISTRAÇÃO · USUÁRIOS"
+        titulo={usuarioDoVinculo ? `Vincular ${usuarioDoVinculo.nome} a um curso` : "Vincular a um curso"}
+        cursos={cursos}
+        periodos={periodos}
+        tipo="escolher"
+        pessoa={{ id: usuarioDoVinculo?.id ?? 0 }}
+        vincular={acaoVincular}
+      />
 
       <Modal
         aberto={usuarioDaSenha !== null}

@@ -29,7 +29,7 @@ async function criarRelatorio({ aprovado }: { aprovado: boolean }) {
     prisma.usuarioPerfil.create({ data: { usuarioId: docente.id, perfil: Perfil.DOCENTE } }),
     prisma.usuarioPerfil.create({ data: { usuarioId: coordenador.id, perfil: Perfil.COORDENADOR } }),
   ]);
-  const curso = await prisma.curso.create({ data: { nome: "Ciência da Computação" } });
+  const curso = await prisma.curso.create({ data: { codigo: "CC", nome: "Ciência da Computação" } });
   const periodo = await prisma.periodoLetivo.create({
     data: {
       ano: 2026,

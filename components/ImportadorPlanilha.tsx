@@ -30,17 +30,25 @@ function plural(quantidade: number, singular: string, varios: string): string {
   return quantidade === 1 ? singular : varios;
 }
 
-function resumoSucesso(importados: number, jaExistiam: number): string {
-  const novos =
+function resumoSucesso(resultado: Extract<ResultadoImportacao, { gravado: true }>): string {
+  const { importados, jaExistiam, atualizados = 0, vinculos = 0 } = resultado;
+  const frases = [
     importados === 0
       ? "Nenhum cadastro novo."
-      : `${importados} ${plural(importados, "cadastro importado.", "cadastros importados.")}`;
-  if (jaExistiam === 0) return novos;
-  return `${novos} ${jaExistiam} ${plural(
-    jaExistiam,
-    "já estava cadastrado e não foi alterado.",
-    "já estavam cadastrados e não foram alterados.",
-  )}`;
+      : `${importados} ${plural(importados, "cadastro importado.", "cadastros importados.")}`,
+  ];
+  if (atualizados > 0) {
+    frases.push(`${atualizados} ${plural(atualizados, "cadastro atualizado.", "cadastros atualizados.")}`);
+  }
+  if (jaExistiam > 0) {
+    frases.push(
+      `${jaExistiam} ${plural(jaExistiam, "já estava cadastrado, sem mudança.", "já estavam cadastrados, sem mudança.")}`,
+    );
+  }
+  if (vinculos > 0) {
+    frases.push(`${vinculos} ${plural(vinculos, "vínculo com curso criado.", "vínculos com curso criados.")}`);
+  }
+  return frases.join(" ");
 }
 
 // Importação genérica de cadastro por planilha: quem usa só troca o modelo
@@ -218,7 +226,7 @@ export function ImportadorPlanilha({
                   Importação concluída
                 </Pill>
               </div>
-              <p className="text-[15px] text-tinta">{resumoSucesso(resultado.importados, resultado.jaExistiam)}</p>
+              <p className="text-[15px] text-tinta">{resumoSucesso(resultado)}</p>
             </section>
           )}
         </form>

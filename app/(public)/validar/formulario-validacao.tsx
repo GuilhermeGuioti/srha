@@ -99,25 +99,27 @@ export function FormularioValidacao() {
           <span aria-hidden className="h-px flex-1 bg-borda" />
         </div>
 
-        <div className="flex flex-col gap-1.5">
-          <Campo rotulo="Código de autenticidade" htmlFor={idCodigo}>
-            <input
-              id={idCodigo}
-              value={codigo}
-              onChange={(evento) => digitar(evento.target.value)}
-              aria-describedby={idDica}
-              autoComplete="off"
-              autoCapitalize="characters"
-              spellCheck={false}
-              maxLength={64}
-              className={`${classeCampo} font-mono uppercase tracking-[0.08em]`}
-            />
-          </Campo>
-          <p id={idDica} className="text-[13px] leading-relaxed text-tinta-suave">
-            Fica no quadro “Código de autenticidade” e no rodapé de cada página, em cinco grupos de quatro
-            caracteres.
-          </p>
-        </div>
+        <Campo
+          rotulo="Código de autenticidade"
+          htmlFor={idCodigo}
+          dica={{
+            id: idDica,
+            texto:
+              "Fica no quadro “Código de autenticidade” e no rodapé de cada página, em cinco grupos de quatro caracteres.",
+          }}
+        >
+          <input
+            id={idCodigo}
+            value={codigo}
+            onChange={(evento) => digitar(evento.target.value)}
+            aria-describedby={idDica}
+            autoComplete="off"
+            autoCapitalize="characters"
+            spellCheck={false}
+            maxLength={64}
+            className={`${classeCampo} font-mono uppercase tracking-[0.08em]`}
+          />
+        </Campo>
 
         <div>
           <BotaoPrimario type="submit" disabled={pendente || (!arquivo && !codigo.trim())}>
