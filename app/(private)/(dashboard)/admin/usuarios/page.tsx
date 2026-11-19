@@ -4,6 +4,7 @@ import { prisma } from "../../../../../lib/db";
 import { listarUsuarios } from "../../../../../lib/services/usuarios";
 import { listarPeriodos } from "../../../../../lib/services/periodos";
 import { formatarDataHora } from "../../../../../lib/formato";
+import { periodoEncerrado } from "../../../../../lib/periodo";
 import { ListaUsuarios } from "./lista-usuarios";
 
 export default async function AdminUsuariosPage() {
@@ -18,7 +19,10 @@ export default async function AdminUsuariosPage() {
   return (
     <ListaUsuarios
       cursos={cursosAtivos.map((curso) => ({ id: curso.id, codigo: curso.codigo, nome: curso.nome }))}
-      periodos={periodos.map((periodo) => ({ id: periodo.id, rotulo: `${periodo.ano}/${periodo.semestre}` }))}
+      // Só os que recebem vínculo: período encerrado não ganha docente.
+      periodosAbertos={periodos
+        .filter((periodo) => !periodoEncerrado(periodo))
+        .map((periodo) => ({ id: periodo.id, rotulo: `${periodo.ano}/${periodo.semestre}` }))}
       usuarios={usuarios.map((usuario) => ({
         id: usuario.id,
         nome: usuario.nome,
@@ -48,6 +52,7 @@ export default async function AdminUsuariosPage() {
             cursoCodigo: vinculo.curso.codigo,
             cursoNome: vinculo.curso.nome,
             periodoRotulo: `${vinculo.periodo.ano}/${vinculo.periodo.semestre}`,
+            encerrado: periodoEncerrado(vinculo.periodo),
           })),
         ],
       }))}

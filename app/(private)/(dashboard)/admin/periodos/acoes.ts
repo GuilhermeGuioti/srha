@@ -18,7 +18,8 @@ const SchemaPeriodo = z.object({
 
 export type DadosFormularioPeriodo = z.infer<typeof SchemaPeriodo>;
 
-// O período aparece nos formulários e listas de vínculo e no total de
+// O período aparece nos formulários e listas de vínculo, e as datas decidem o
+// que ainda dá para vincular (período encerrado não muda) e o total de
 // docentes de cada curso.
 function revalidarTelasDePeriodo(): void {
   revalidatePath("/admin/periodos");

@@ -24,15 +24,18 @@ async function obterAmbiente() {
     prisma.curso.create({ data: { codigo: "FIS", nome: "Fisioterapia" } }),
     prisma.curso.create({ data: { codigo: "ENF", nome: "Enfermagem" } }),
   ]);
-  const periodo = await prisma.periodoLetivo.create({
-    data: {
-      ano: 2026,
-      semestre: 2,
-      aberturaSubmissao: new Date("2026-08-01T00:00:00Z"),
-      encerramentoSubmissao: new Date("2026-12-15T23:59:59Z"),
-    },
-  });
+  const periodo = await prisma.periodoLetivo.create({ data: { ano: 2026, semestre: 2, ...emAberto() } });
   return { docente, curso, outroCurso, periodo };
+}
+
+// Vínculo de docente só muda em período não encerrado: as datas acompanham o
+// dia em que o teste roda, e o rótulo (ano/semestre) fica livre.
+const DIA = 86_400_000;
+function emAberto() {
+  return { aberturaSubmissao: new Date(Date.now() - 30 * DIA), encerramentoSubmissao: new Date(Date.now() + 30 * DIA) };
+}
+function encerrado() {
+  return { aberturaSubmissao: new Date(Date.now() - 60 * DIA), encerramentoSubmissao: new Date(Date.now() - DIA) };
 }
 
 async function perfisDe(usuarioId: number) {
@@ -154,17 +157,57 @@ test("usuário ou curso inativo não ganha vínculo novo, de docente nem de coor
   expect(await prisma.vinculoCoordenadorCurso.count()).toBe(0);
 });
 
+describe("período encerrado", () => {
+  async function encerrar(periodoLetivoId: number) {
+    await prisma.periodoLetivo.update({ where: { id: periodoLetivoId }, data: encerrado() });
+  }
+
+  test("não ganha nem perde vínculo de docente; reaberto, volta a mudar", async () => {
+    const { docente, curso, outroCurso, periodo } = await obterAmbiente();
+    await vincularDocente(docente.id, curso.id, periodo.id);
+    const [vinculo] = await listarVinculosDocente();
+    await encerrar(periodo.id);
+
+    const mensagem = "O período 2026/2 já foi encerrado — os vínculos de docente dele não mudam mais.";
+    await expect(vincularDocente(docente.id, outroCurso.id, periodo.id)).rejects.toThrow(mensagem);
+    await expect(desvincularDocente(vinculo.id)).rejects.toThrow(mensagem);
+    expect(await listarVinculosDocente()).toHaveLength(1);
+
+    // Estendendo o encerramento, a secretaria reabre o período e corrige.
+    await prisma.periodoLetivo.update({ where: { id: periodo.id }, data: emAberto() });
+    await desvincularDocente(vinculo.id);
+    expect(await listarVinculosDocente()).toHaveLength(0);
+  });
+
+  test("coordenação não tem período: continua mudando", async () => {
+    const { docente, curso, periodo } = await obterAmbiente();
+    await encerrar(periodo.id);
+
+    await vincularCoordenador(docente.id, curso.id);
+    const [vinculo] = await listarVinculosCoordenador();
+    await desvincularCoordenador(vinculo.id);
+
+    expect(await listarVinculosCoordenador()).toHaveLength(0);
+  });
+
+  test("não é destino de renovação", async () => {
+    const { docente, curso, periodo } = await obterAmbiente();
+    await vincularDocente(docente.id, curso.id, periodo.id);
+    const novo = await prisma.periodoLetivo.create({ data: { ano: 2027, semestre: 1, ...encerrado() } });
+
+    await expect(previaRenovacao(novo.id)).rejects.toThrow("O período 2027/1 já foi encerrado");
+    await expect(renovarVinculos(novo.id, [{ docenteId: docente.id, cursoId: curso.id }])).rejects.toThrow(
+      "O período 2027/1 já foi encerrado",
+    );
+  });
+});
+
 test("remover vínculo de coordenador que não existe mais dá mensagem clara", async () => {
   await expect(desvincularCoordenador(999)).rejects.toThrow("Vínculo não encontrado.");
 });
 
 describe("renovação de semestre", () => {
-  const prazos = (ano: number, semestre: number) => ({
-    ano,
-    semestre,
-    aberturaSubmissao: new Date(Date.UTC(ano, semestre === 1 ? 1 : 7, 1, 3)),
-    encerramentoSubmissao: new Date(Date.UTC(ano, semestre === 1 ? 6 : 11, 10, 3)),
-  });
+  const prazos = (ano: number, semestre: number) => ({ ano, semestre, ...emAberto() });
 
   async function docentesDo(periodoLetivoId: number) {
     const vinculos = await prisma.vinculoDocenteCurso.findMany({
@@ -188,6 +231,8 @@ describe("renovação de semestre", () => {
     await vincularDocente(ana.id, curso.id, periodo.id);
     await vincularDocente(saulo.id, curso.id, periodo.id);
     await prisma.usuario.update({ where: { id: saulo.id }, data: { ativo: false } });
+    // O caso de todo semestre: o anterior já encerrou quando a renovação abre.
+    await prisma.periodoLetivo.update({ where: { id: periodo.id }, data: encerrado() });
     return { ...ambiente, ana, saulo };
   }
 

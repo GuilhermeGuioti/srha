@@ -19,7 +19,7 @@ import {
 import { acaoVincular, acaoDesvincularDocente, acaoDesvincularCoordenador } from "../vinculos/acoes";
 
 export type VinculoUsuario =
-  | { id: number; tipo: "docente"; cursoCodigo: string; cursoNome: string; periodoRotulo: string }
+  | { id: number; tipo: "docente"; cursoCodigo: string; cursoNome: string; periodoRotulo: string; encerrado: boolean }
   | { id: number; tipo: "coordenador"; cursoCodigo: string; cursoNome: string };
 
 type Pessoa = { id: number; nome: string; ativo: boolean; vinculos: VinculoUsuario[] };
@@ -30,15 +30,17 @@ const classeListaBloco = "mt-1.5 divide-y divide-borda rounded-xl border border-
 // Coordenação primeiro, sem período; docência agrupada por período, do mais
 // recente ao mais antigo (a ordem que a page já manda). Acrescentar troca o
 // conteúdo do mesmo modal pelo formulário — sem modal em cima de modal.
+// Período encerrado aparece para consulta, sem remover; e não é oferecido
+// para acrescentar (`periodosAbertos`).
 export function ModalVinculosUsuario({
   pessoa,
   cursos,
-  periodos,
+  periodosAbertos: periodos,
   onFechar,
 }: {
   pessoa: Pessoa;
   cursos: { id: number; codigo: string; nome: string }[];
-  periodos: { id: number; rotulo: string }[];
+  periodosAbertos: { id: number; rotulo: string }[];
   onFechar: () => void;
 }) {
   const router = useRouter();
@@ -49,10 +51,12 @@ export function ModalVinculosUsuario({
   const [pendente, startTransition] = useTransition();
 
   const coordenacao = pessoa.vinculos.filter((vinculo) => vinculo.tipo === "coordenador");
-  const docenciaPorPeriodo = new Map<string, VinculoUsuario[]>();
+  const docenciaPorPeriodo = new Map<string, { encerrado: boolean; vinculos: VinculoUsuario[] }>();
   for (const vinculo of pessoa.vinculos) {
     if (vinculo.tipo !== "docente") continue;
-    docenciaPorPeriodo.set(vinculo.periodoRotulo, [...(docenciaPorPeriodo.get(vinculo.periodoRotulo) ?? []), vinculo]);
+    const grupo = docenciaPorPeriodo.get(vinculo.periodoRotulo) ?? { encerrado: vinculo.encerrado, vinculos: [] };
+    grupo.vinculos.push(vinculo);
+    docenciaPorPeriodo.set(vinculo.periodoRotulo, grupo);
   }
 
   function acrescentar() {
@@ -100,16 +104,23 @@ export function ModalVinculosUsuario({
 
   function linha(vinculo: VinculoUsuario) {
     const onde = vinculo.tipo === "docente" ? ` em ${vinculo.periodoRotulo}` : " (coordenação)";
+    const fixo = vinculo.tipo === "docente" && vinculo.encerrado;
     return (
-      <li key={`${vinculo.tipo}-${vinculo.id}`} className="flex items-center justify-between gap-3 py-0.5 pr-1 pl-3.5">
+      <li
+        key={`${vinculo.tipo}-${vinculo.id}`}
+        // Sem o botão, a linha mantém a altura das que têm.
+        className="flex min-h-12 items-center justify-between gap-3 py-0.5 pr-1 pl-3.5"
+      >
         <NomeCurso codigo={vinculo.cursoCodigo} nome={vinculo.cursoNome} />
-        <AcaoTabela
-          cor="devolvido"
-          rotulo={`Remover vínculo com ${vinculo.cursoNome}${onde}`}
-          onClick={() => remover(vinculo)}
-        >
-          <IconeRemover className="h-[18px] w-[18px]" />
-        </AcaoTabela>
+        {!fixo && (
+          <AcaoTabela
+            cor="devolvido"
+            rotulo={`Remover vínculo com ${vinculo.cursoNome}${onde}`}
+            onClick={() => remover(vinculo)}
+          >
+            <IconeRemover className="h-[18px] w-[18px]" />
+          </AcaoTabela>
+        )}
       </li>
     );
   }
@@ -126,7 +137,7 @@ export function ModalVinculosUsuario({
           ? valores.tipo === "coordenador"
             ? AVISO_AVALIADOR
             : `Curso em que ${pessoa.nome} dá aula, no período.`
-          : "Docência é por período; coordenação vale até ser removida."
+          : "Docência é por período, e período encerrado não muda; coordenação vale até ser removida."
       }
       onFechar={onFechar}
       rodape={
@@ -181,10 +192,13 @@ export function ModalVinculosUsuario({
               <p className="mt-1.5 text-[15px] text-tinta-suave">Não dá aula em nenhum curso.</p>
             ) : (
               <div className="mt-1.5 flex flex-col gap-3">
-                {[...docenciaPorPeriodo].map(([periodo, vinculos]) => (
+                {[...docenciaPorPeriodo].map(([periodo, grupo]) => (
                   <div key={periodo}>
-                    <div className="font-mono text-[13px] font-medium tabular-nums text-tinta-suave">{periodo}</div>
-                    <ul className={classeListaBloco}>{vinculos.map(linha)}</ul>
+                    <div className="text-[13px] text-tinta-suave">
+                      <span className="font-mono font-medium tabular-nums">{periodo}</span>
+                      {grupo.encerrado && " · encerrado"}
+                    </div>
+                    <ul className={classeListaBloco}>{grupo.vinculos.map(linha)}</ul>
                   </div>
                 ))}
               </div>

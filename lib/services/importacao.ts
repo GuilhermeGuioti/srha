@@ -2,6 +2,7 @@ import { z } from "zod";
 import { prisma } from "../db";
 import { Perfil, Prisma } from "../../generated/prisma/client";
 import { SchemaCodigoCurso, SchemaListaCodigosCurso } from "../curso";
+import { mensagemPeriodoEncerrado, periodoEncerrado } from "../periodo";
 import {
   MODELOS_IMPORTACAO,
   decodificarPlanilha,
@@ -19,7 +20,8 @@ import { MENSAGEM_ULTIMA_SECRETARIA, SECRETARIA_ATIVA, travarPerfisDeSecretaria 
 //   cadastrado é contado como já existente. Curso e vínculo existentes nunca
 //   são alterados; usuário existente tem nome e secretaria atualizados pela
 //   planilha (importarUsuarios);
-// - nenhuma planilha remove vínculo, só acrescenta;
+// - nenhuma planilha remove vínculo, só acrescenta — e nunca em período
+//   encerrado;
 // - linha repetida dentro da própria planilha é erro, porque costuma ser
 //   engano (o mesmo e-mail com dois nomes, por exemplo);
 // - curso é sempre achado pelo código, nunca pelo nome: nome digitado com
@@ -119,23 +121,31 @@ function resolverUsuario(
   return null;
 }
 
-async function indexarPeriodos(tx: Prisma.TransactionClient): Promise<Map<string, number>> {
-  const periodos = await tx.periodoLetivo.findMany({ select: { id: true, ano: true, semestre: true } });
-  return new Map(periodos.map((periodo) => [`${periodo.ano}/${periodo.semestre}`, periodo.id]));
+type PeriodoIndexado = { id: number; ano: number; semestre: number; encerramentoSubmissao: Date };
+
+async function indexarPeriodos(tx: Prisma.TransactionClient): Promise<Map<string, PeriodoIndexado>> {
+  const periodos = await tx.periodoLetivo.findMany({
+    select: { id: true, ano: true, semestre: true, encerramentoSubmissao: true },
+  });
+  return new Map(periodos.map((periodo) => [`${periodo.ano}/${periodo.semestre}`, periodo]));
 }
 
+// Período encerrado não recebe vínculo de docente, nem por planilha.
 function resolverPeriodo(
-  indice: Map<string, number>,
+  indice: Map<string, PeriodoIndexado>,
   periodo: { ano: number; semestre: number },
   linha: number,
   erros: ErroLinha[],
 ): number | null {
-  const id = indice.get(`${periodo.ano}/${periodo.semestre}`);
-  if (id === undefined) {
+  const encontrado = indice.get(`${periodo.ano}/${periodo.semestre}`);
+  if (!encontrado) {
     erros.push({ linha, erro: `Período ${periodo.ano}/${periodo.semestre} não cadastrado.` });
-    return null;
+  } else if (periodoEncerrado(encontrado)) {
+    erros.push({ linha, erro: mensagemPeriodoEncerrado(encontrado) });
+  } else {
+    return encontrado.id;
   }
-  return id;
+  return null;
 }
 
 type NovoVinculoDocente = { docenteId: number; cursoId: number; periodoLetivoId: number };

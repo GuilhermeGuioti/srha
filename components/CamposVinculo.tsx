@@ -21,7 +21,8 @@ export type ValoresVinculo = {
 export const AVISO_AVALIADOR =
   "O primeiro coordenador ativo cadastrado para o curso é quem recebe os relatórios para avaliação.";
 
-// `periodos` vem do mais recente ao mais antigo: o primeiro já vem escolhido.
+// `periodos` são só os não encerrados (os que recebem vínculo), do mais
+// recente ao mais antigo: o primeiro já vem escolhido.
 export function valoresIniciais(tipo: TipoVinculo, pessoaId: number | "", periodos: Opcao[]): ValoresVinculo {
   return { tipo, cursoId: "", pessoaId, periodoId: periodos[0]?.id ?? "" };
 }
@@ -118,8 +119,8 @@ export function CamposVinculo({
       {valores.tipo === "docente" &&
         (faltaPeriodo(valores, periodos) ? (
           <p className="text-[15px] text-tinta">
-            Nenhum período letivo cadastrado. <LinkTexto href="/admin/periodos">Cadastre um período</LinkTexto> antes
-            de vincular docentes a cursos.
+            Nenhum período letivo aberto ou agendado — período encerrado não recebe vínculo.{" "}
+            <LinkTexto href="/admin/periodos">Cadastre um período</LinkTexto> antes de vincular docentes a cursos.
           </p>
         ) : (
           <Campo rotulo="Período" htmlFor={`${id}-periodo`}>

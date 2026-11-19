@@ -36,15 +36,28 @@ async function obterAmbiente() {
     prisma.curso.create({ data: { codigo: "ES", nome: "Engenharia de Software" } }),
     prisma.curso.create({ data: { codigo: "EXT", nome: "Curso Extinto", ativo: false } }),
   ]);
+  // Vínculo só entra em período não encerrado: as datas acompanham o dia do teste.
   const periodo = await prisma.periodoLetivo.create({
     data: {
       ano: 2026,
       semestre: 2,
-      aberturaSubmissao: new Date("2026-08-01T00:00:00Z"),
-      encerramentoSubmissao: new Date("2026-12-15T23:59:59Z"),
+      aberturaSubmissao: new Date(Date.now() - 30 * 86_400_000),
+      encerramentoSubmissao: new Date(Date.now() + 30 * 86_400_000),
     },
   });
   return { ana, bruno, inativo, computacao, software, extinto, periodo };
+}
+
+// Período que já passou: não recebe vínculo de docente, nem por planilha.
+async function criarPeriodoEncerrado(ano: number, semestre: number) {
+  return prisma.periodoLetivo.create({
+    data: {
+      ano,
+      semestre,
+      aberturaSubmissao: new Date(Date.now() - 60 * 86_400_000),
+      encerramentoSubmissao: new Date(Date.now() - 86_400_000),
+    },
+  });
 }
 
 beforeEach(async () => {
@@ -236,6 +249,7 @@ describe("importarUsuarios", () => {
     });
 
     // Corrigido o formato, os erros que dependem do cadastro aparecem.
+    await criarPeriodoEncerrado(2026, 1);
     const corrigida = await importarUsuarios(
       planilha(
         "Nome;E-mail;Cursos como docente;Ano;Semestre;Cursos como coordenador",
@@ -243,6 +257,7 @@ describe("importarUsuarios", () => {
         "Elis;elis@srha.dev;;;;EXT",
         "Fábio;fabio@srha.dev;CC;2027;1;",
         "Inês Inativa;ines@srha.dev;;;;CC",
+        "Jair;jair@srha.dev;CC;2026;1;",
       ),
     );
     expect(corrigida).toEqual({
@@ -252,6 +267,7 @@ describe("importarUsuarios", () => {
         { linha: 3, erro: "O curso EXT está inativo." },
         { linha: 4, erro: "Período 2027/1 não cadastrado." },
         { linha: 5, erro: "O usuário ines@srha.dev está inativo e não pode ser vinculado a curso." },
+        { linha: 6, erro: "O período 2026/1 já foi encerrado — os vínculos de docente dele não mudam mais." },
       ],
     });
     expect(await prisma.usuario.count()).toBe(3);
@@ -371,8 +387,9 @@ describe("importarVinculosDocente", () => {
     expect(await perfisDe("ana@srha.dev")).toEqual([Perfil.DOCENTE]);
   });
 
-  test("referência inexistente ou inativa: nada é gravado, nem as linhas boas", async () => {
+  test("referência inexistente, inativa ou de período encerrado: nada é gravado, nem as linhas boas", async () => {
     await obterAmbiente();
+    await criarPeriodoEncerrado(2026, 1);
 
     const resultado = await importarVinculosDocente(
       planilha(
@@ -384,6 +401,7 @@ describe("importarVinculosDocente", () => {
         "bruno@srha.dev;MED;2026;2",
         "bruno@srha.dev;CC;2027;1",
         "bruno@srha.dev;CC;2026;3",
+        "bruno@srha.dev;CC;2026;1",
       ),
     );
 
@@ -396,6 +414,7 @@ describe("importarVinculosDocente", () => {
         { linha: 6, erro: "Nenhum curso cadastrado com o código MED." },
         { linha: 7, erro: "Período 2027/1 não cadastrado." },
         { linha: 8, erro: "Semestre deve ser 1 ou 2." },
+        { linha: 9, erro: "O período 2026/1 já foi encerrado — os vínculos de docente dele não mudam mais." },
       ],
     });
     expect(await prisma.vinculoDocenteCurso.count()).toBe(0);

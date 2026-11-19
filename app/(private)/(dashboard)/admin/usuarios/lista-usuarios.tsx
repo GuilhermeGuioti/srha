@@ -71,11 +71,11 @@ function temPerfil(usuario: UsuarioLinha, filtro: FiltroPerfil): boolean {
 export function ListaUsuarios({
   usuarios,
   cursos,
-  periodos,
+  periodosAbertos,
 }: {
   usuarios: UsuarioLinha[];
   cursos: { id: number; codigo: string; nome: string }[];
-  periodos: { id: number; rotulo: string }[];
+  periodosAbertos: { id: number; rotulo: string }[];
 }) {
   const router = useRouter();
   const [modalAberto, setModalAberto] = useState(false);
@@ -179,7 +179,7 @@ export function ListaUsuarios({
               modelo={MODELOS_IMPORTACAO.usuarios}
               eyebrow="ADMINISTRAÇÃO · USUÁRIOS"
               titulo="Importar usuários"
-              descricao="Uma pessoa por linha. E-mail já cadastrado tem o nome atualizado, e a Secretaria também se a coluna vier na planilha. As colunas de cursos são opcionais e vinculam pelo código do curso; a planilha só acrescenta vínculos, nunca remove."
+              descricao="Uma pessoa por linha. E-mail já cadastrado tem o nome atualizado, e a Secretaria também se a coluna vier na planilha. As colunas de cursos são opcionais e vinculam pelo código do curso (como docente, só em período não encerrado); a planilha só acrescenta vínculos, nunca remove."
               acao={acaoImportarUsuarios}
             />
             <BotaoPrimario onClick={abrirNovo} icone>
@@ -316,7 +316,7 @@ export function ListaUsuarios({
         <ModalVinculosUsuario
           pessoa={usuarioDosVinculos}
           cursos={cursos}
-          periodos={periodos}
+          periodosAbertos={periodosAbertos}
           onFechar={() => setIdDosVinculos(null)}
         />
       )}

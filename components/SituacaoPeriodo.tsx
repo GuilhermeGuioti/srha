@@ -1,4 +1,5 @@
 import { Pill } from "./Pill";
+import { periodoEncerrado } from "../lib/periodo";
 
 export type ChaveSituacaoPeriodo = "AGENDADO" | "ABERTO" | "ENCERRADO";
 
@@ -16,7 +17,7 @@ const APARENCIA: Record<ChaveSituacaoPeriodo, { rotulo: string; cor: "aprovado" 
 export function situacaoPeriodo(periodo: Prazos): ChaveSituacaoPeriodo {
   const agora = new Date();
   if (agora < new Date(periodo.aberturaSubmissao)) return "AGENDADO";
-  if (agora > new Date(periodo.encerramentoSubmissao)) return "ENCERRADO";
+  if (periodoEncerrado(periodo, agora)) return "ENCERRADO";
   return "ABERTO";
 }
 

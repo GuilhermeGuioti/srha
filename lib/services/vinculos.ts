@@ -1,6 +1,7 @@
 import { prisma } from "../db";
 import { Perfil, Prisma } from "../../generated/prisma/client";
 import { sincronizarPerfil } from "./perfis";
+import { mensagemPeriodoEncerrado, periodoEncerrado } from "../periodo";
 
 export async function listarVinculosDocente() {
   return prisma.vinculoDocenteCurso.findMany({
@@ -39,7 +40,19 @@ async function exigirAtivos(usuarioId: number, cursoId: number): Promise<void> {
   }
 }
 
+// Vínculo de docente só muda em período que ainda não encerrou (lib/periodo.ts).
+function exigirNaoEncerrado(periodo: { ano: number; semestre: number; encerramentoSubmissao: Date }): void {
+  if (periodoEncerrado(periodo)) {
+    throw new Error(mensagemPeriodoEncerrado(periodo));
+  }
+}
+
 export async function vincularDocente(docenteId: number, cursoId: number, periodoLetivoId: number): Promise<void> {
+  const periodo = await prisma.periodoLetivo.findUnique({ where: { id: periodoLetivoId } });
+  if (!periodo) {
+    throw new Error("Período letivo não encontrado.");
+  }
+  exigirNaoEncerrado(periodo);
   await exigirAtivos(docenteId, cursoId);
   const existente = await prisma.vinculoDocenteCurso.findUnique({
     where: { docenteId_cursoId_periodoLetivoId: { docenteId, cursoId, periodoLetivoId } },
@@ -55,10 +68,11 @@ export async function vincularDocente(docenteId: number, cursoId: number, period
 
 export async function desvincularDocente(vinculoId: number): Promise<void> {
   await prisma.$transaction(async (tx) => {
-    const vinculo = await tx.vinculoDocenteCurso.findUnique({ where: { id: vinculoId } });
+    const vinculo = await tx.vinculoDocenteCurso.findUnique({ where: { id: vinculoId }, include: { periodo: true } });
     if (!vinculo) {
       throw new Error("Vínculo não encontrado.");
     }
+    exigirNaoEncerrado(vinculo.periodo);
     // Arquivo e painel partem dos vínculos: sem ele, o relatório — mesmo
     // aprovado — sumiria da consulta (RNF09). Mesma regra do RF03 para curso
     // com relatório: bloqueia com mensagem em vez de excluir.
@@ -114,7 +128,8 @@ export async function desvincularCoordenador(vinculoId: number): Promise<void> {
 // todo mundo de novo a cada semestre. "Anterior" é o cadastrado logo antes por
 // ano e semestre, não o último criado. Copia vínculo, nunca relatório: a linha
 // de Relatorio continua nascendo sob demanda, e quem nunca abrir o sistema
-// aparece como "não iniciado" no painel (RF18).
+// aparece como "não iniciado" no painel (RF18). Destino encerrado não renova:
+// a regra de vincularDocente vale aqui também.
 
 type Rotulo = { ano: number; semestre: number };
 
@@ -134,6 +149,7 @@ async function periodoEAnterior(cliente: Prisma.TransactionClient, periodoLetivo
   if (!periodo) {
     throw new Error("Período letivo não encontrado.");
   }
+  exigirNaoEncerrado(periodo);
   const anterior = await cliente.periodoLetivo.findFirst({
     where: { OR: [{ ano: { lt: periodo.ano } }, { ano: periodo.ano, semestre: { lt: periodo.semestre } }] },
     orderBy: [{ ano: "desc" }, { semestre: "desc" }],

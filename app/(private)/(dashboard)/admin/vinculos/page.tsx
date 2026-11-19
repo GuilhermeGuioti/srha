@@ -3,6 +3,7 @@ import { Perfil } from "../../../../../generated/prisma/client";
 import { prisma } from "../../../../../lib/db";
 import { listarPeriodos } from "../../../../../lib/services/periodos";
 import { listarVinculosDocente, listarVinculosCoordenador } from "../../../../../lib/services/vinculos";
+import { periodoEncerrado } from "../../../../../lib/periodo";
 import { ListaVinculos } from "./lista-vinculos";
 
 export default async function AdminVinculosPage() {
@@ -18,11 +19,18 @@ export default async function AdminVinculosPage() {
 
   return (
     <ListaVinculos
-      periodos={periodos.map((periodo) => ({ id: periodo.id, rotulo: `${periodo.ano}/${periodo.semestre}` }))}
+      // "Encerrado" calculado aqui, uma vez: no cliente, servidor e navegador
+      // podiam discordar na virada do prazo.
+      periodos={periodos.map((periodo) => ({
+        id: periodo.id,
+        rotulo: `${periodo.ano}/${periodo.semestre}`,
+        encerrado: periodoEncerrado(periodo),
+      }))}
       vinculosDocente={vinculosDocente.map((vinculo) => ({
         id: vinculo.id,
         periodoLetivoId: vinculo.periodoLetivoId,
         periodoRotulo: `${vinculo.periodo.ano}/${vinculo.periodo.semestre}`,
+        encerrado: periodoEncerrado(vinculo.periodo),
         cursoId: vinculo.cursoId,
         cursoCodigo: vinculo.curso.codigo,
         cursoNome: vinculo.curso.nome,

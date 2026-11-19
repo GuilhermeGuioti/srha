@@ -28,13 +28,14 @@ import {
 } from "./acoes";
 import { ModalVinculo } from "./modal-vinculo";
 
-type Periodo = { id: number; rotulo: string };
+type Periodo = { id: number; rotulo: string; encerrado: boolean };
 type Curso = { id: number; codigo: string; nome: string };
 type Opcao = { id: number; nome: string };
 type VinculoDocente = {
   id: number;
   periodoLetivoId: number;
   periodoRotulo: string;
+  encerrado: boolean;
   cursoId: number;
   cursoCodigo: string;
   cursoNome: string;
@@ -71,6 +72,8 @@ export function ListaVinculos({
   const buscaDocentes = useBusca();
   const buscaCoordenadores = useBusca();
   const [periodoFiltroId, setPeriodoFiltroId] = useState<number | "todos">("todos");
+  // Período encerrado não ganha nem perde docente: fica só no filtro, para consulta.
+  const periodosAbertos = periodos.filter((periodo) => !periodo.encerrado);
 
   const docentesFiltrados = vinculosDocente.filter(
     (vinculo) =>
@@ -111,7 +114,8 @@ export function ListaVinculos({
         titulo="Vínculos"
         subtitulo={
           <p className="text-[15px] text-tinta-suave">
-            Quem dá aula em qual curso, por período, e quem coordena cada curso.
+            Quem dá aula em qual curso, por período, e quem coordena cada curso. Período encerrado já foi: os
+            docentes dele não mudam mais.
           </p>
         }
       />
@@ -132,12 +136,14 @@ export function ListaVinculos({
               titulo="Docentes por curso"
               acao={
                 <>
-                  <BotaoSecundario onClick={() => setRenovando(true)}>Renovar do período anterior</BotaoSecundario>
+                  {periodosAbertos.length > 0 && (
+                    <BotaoSecundario onClick={() => setRenovando(true)}>Renovar do período anterior</BotaoSecundario>
+                  )}
                   <ImportadorPlanilha
                     modelo={MODELOS_IMPORTACAO.vinculosDocente}
                     eyebrow="ADMINISTRAÇÃO · VÍNCULOS"
                     titulo="Importar vínculos de docentes"
-                    descricao="Um vínculo por linha, com o curso pelo código. Docente, curso e período precisam estar cadastrados e ativos; vínculo que já existe é ignorado."
+                    descricao="Um vínculo por linha, com o curso pelo código. Docente e curso precisam estar cadastrados e ativos, e o período, cadastrado e não encerrado; vínculo que já existe é ignorado."
                     complementoAcessivel="de vínculos de docentes"
                     acao={acaoImportarVinculosDocente}
                   />
@@ -194,15 +200,16 @@ export function ListaVinculos({
                   cabecalho: "",
                   alinhado: "direita",
                   largura: "12%",
-                  render: (vinculo) => (
-                    <AcaoTabela
-                      cor="devolvido"
-                      rotulo={`Remover vínculo de ${vinculo.docenteNome} em ${vinculo.cursoNome}`}
-                      onClick={() => remover("docente", vinculo.id, `${vinculo.docenteNome} em ${vinculo.cursoNome}`)}
-                    >
-                      <IconeRemover className="h-[18px] w-[18px]" />
-                    </AcaoTabela>
-                  ),
+                  render: (vinculo) =>
+                    vinculo.encerrado ? null : (
+                      <AcaoTabela
+                        cor="devolvido"
+                        rotulo={`Remover vínculo de ${vinculo.docenteNome} em ${vinculo.cursoNome}`}
+                        onClick={() => remover("docente", vinculo.id, `${vinculo.docenteNome} em ${vinculo.cursoNome}`)}
+                      >
+                        <IconeRemover className="h-[18px] w-[18px]" />
+                      </AcaoTabela>
+                    ),
                 },
               ]}
             />
@@ -280,17 +287,17 @@ export function ListaVinculos({
           tipo={modo}
           onFechar={() => setModo(null)}
           cursos={cursos}
-          periodos={periodos}
+          periodos={periodosAbertos}
           pessoas={usuarios.map((usuario) => ({ id: usuario.id, rotulo: usuario.nome }))}
         />
       )}
 
-      {renovando && periodos.length > 0 && (
+      {renovando && periodosAbertos.length > 0 && (
         <ModalRenovacao
           eyebrow="ADMINISTRAÇÃO · VÍNCULOS"
           onFechar={() => setRenovando(false)}
-          periodoId={periodos[0].id}
-          periodos={periodos}
+          periodoId={periodosAbertos[0].id}
+          periodos={periodosAbertos}
           carregarPrevia={acaoPreviaRenovacao}
           renovar={acaoRenovarVinculos}
         />
